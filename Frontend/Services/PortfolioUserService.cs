@@ -3,7 +3,19 @@ using SkillSnap.Shared.Models;
 
 namespace Frontend.Services
 {
-    public class PortfolioUserService
+    public interface IPortfolioUserService
+    {
+        Task<List<PortfolioUser>> GetAllPortfolioUsersAsync();
+        Task<PortfolioUser?> GetPortfolioUserByIdAsync(int id);
+        Task<PortfolioUser?> GetMyPortfolioUserAsync();
+        Task<PortfolioUser> CreatePortfolioUserAsync(PortfolioUser portfolioUser);
+        Task<bool> UpdatePortfolioUserAsync(int id, PortfolioUser portfolioUser);
+        Task<bool> DeletePortfolioUserAsync(int id);
+        Task<string> GetUserRoleAsync(int id);
+        Task<bool> UpdateUserRoleAsync(int id, string role);
+    }
+
+    public class PortfolioUserService : IPortfolioUserService
     {
         private readonly AuthenticatedHttpClientService _httpClientService;
         private readonly JsonSerializerOptions _jsonOptions;

@@ -1,0 +1,270 @@
+@page "/projects-new"
+@using SkillSnap.Shared.Models
+@using Frontend.Services
+@using Frontend.Shared
+@using Frontend.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@inherits StateAwareComponentBase
+@inject IProjectService ProjectService
+
+<h3>Manage Projects (with State Management)</h3>
+
+<AuthorizeView Context="authContext">
+    <Authorized>
+        @if (authContext.User.IsInRole("User"))
+        {
+            <!-- User Role: Only see their own projects -->
+            @if (UserSession.CurrentPortfolioUser == null)
+            {
+                <p><em>Loading your portfolio...</em></p>
+            }
+            else if (UserSession.CurrentPortfolioUser.Id == 0)
+            {
+                <div class="alert alert-warning">
+                    <p>You don't have a portfolio user profile yet. Please contact an administrator to set up your profile.</p>
+                </div>
+            }
+            else
+            {
+                <!-- Add New Project Form for User -->
+                <div class="add-project-form">
+                    <h4>Add New Project</h4>
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <input class="form-control" @bind="newProject.Title" placeholder="Enter project title" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" @bind="newProject.Description" placeholder="Enter project description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Project URL</label>
+                        <input class="form-control" @bind="newProject.ProjectUrl" placeholder="Enter project URL" />
+                    </div>
+                    <div class="mb-3">
+                        <button class="btn btn-primary" @onclick="() => AddProject(UserSession.CurrentPortfolioUser.Id)">Add Project</button>
+                    </div>
+                </div>
+
+                <h4>My Projects (@(UserSession.UserProjects?.Count ?? 0))</h4>
+                
+                @if (UserSession.UserProjects?.Any() == true)
+                {
+                    <div class="projects-grid">
+                        @foreach (var project in UserSession.UserProjects)
+                        {
+                            <div class="card project-card">
+                                <div class="card-body">
+                                    @if (editingProjectId == project.Id)
+                                    {
+                                        <!-- Edit Mode -->
+                                        <div class="mb-3">
+                                            <input class="form-control" @bind="editingProject.Title" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <textarea class="form-control" @bind="editingProject.Description" rows="3"></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <input class="form-control" @bind="editingProject.ProjectUrl" placeholder="Project URL" />
+                                        </div>
+                                        <button class="btn btn-success me-2" @onclick="() => SaveProject(project.Id)">Save</button>
+                                        <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <!-- Display Mode -->
+                                        <h5 class="card-title">@project.Title</h5>
+                                        <p class="card-text">@project.Description</p>
+                                        @if (!string.IsNullOrEmpty(project.ProjectUrl))
+                                        {
+                                            <a href="@project.ProjectUrl" target="_blank" class="btn btn-sm btn-outline-primary me-2">View Project</a>
+                                        }
+                                        <div class="mt-2">
+                                            <button class="btn btn-sm btn-warning me-2" @onclick="() => EditProject(project)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteProject(project.Id)">Delete</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p>You haven't added any projects yet.</p>
+                }
+            }
+        }
+        else
+        {
+            <!-- Admin/Manager Role: See all projects -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="add-project-form">
+                        <h4>Add New Project</h4>
+                        <div class="mb-3">
+                            <label class="form-label">Portfolio User</label>
+                            <select class="form-select" @bind="newProject.PortfolioUserId">
+                                <option value="0">Select Portfolio User</option>
+                                @if (UserSession.PortfolioUsers != null)
+                                {
+                                    @foreach (var user in UserSession.PortfolioUsers)
+                                    {
+                                        <option value="@user.Id">@user.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input class="form-control" @bind="newProject.Title" placeholder="Enter project title" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" @bind="newProject.Description" placeholder="Enter project description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Project URL</label>
+                            <input class="form-control" @bind="newProject.ProjectUrl" placeholder="Enter project URL" />
+                        </div>
+                        <div class="mb-3">
+                            <button class="btn btn-primary" @onclick="AddProject" disabled="@(newProject.PortfolioUserId == 0)">Add Project</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Display all projects for admin -->
+            <h4>All Projects</h4>
+            <button class="btn btn-outline-secondary mb-3" @onclick="RefreshAllData">Refresh Data</button>
+            
+            <!-- Projects will be loaded from UserSession state -->
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p>You need to be logged in to view this page.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private Project newProject = new();
+    
+    // Edit state
+    private int? editingProjectId = null;
+    private Project editingProject = new();
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load data based on user role
+        if (UserSession.IsAuthenticated)
+        {
+            if (AuthenticationStateTask != null)
+            {
+                var authState = await AuthenticationStateTask;
+                if (authState.User.IsInRole("User"))
+                {
+                    // Load user-specific data
+                    await UserSession.LoadCurrentPortfolioUserAsync();
+                    await UserSession.LoadUserProjectsAsync();
+                }
+                else
+                {
+                    // Load all data for admin/manager
+                    await UserSession.LoadPortfolioUsersAsync();
+                    await UserSession.LoadUserProjectsAsync();
+                }
+            }
+        }
+    }
+
+    private async Task AddProject()
+    {
+        if (!string.IsNullOrWhiteSpace(newProject.Title) && newProject.PortfolioUserId > 0)
+        {
+            await ProjectService.CreateProjectAsync(newProject);
+            newProject = new();
+            
+            // Invalidate and reload projects cache
+            await UserSession.InvalidateProjectsCache();
+        }
+    }
+
+    private async Task AddProject(int portfolioUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(newProject.Title))
+        {
+            newProject.PortfolioUserId = portfolioUserId;
+            await ProjectService.CreateProjectAsync(newProject);
+            newProject = new();
+            
+            // Invalidate and reload projects cache
+            await UserSession.InvalidateProjectsCache();
+        }
+    }
+
+    private void EditProject(Project project)
+    {
+        editingProjectId = project.Id;
+        editingProject = new Project
+        {
+            Id = project.Id,
+            Title = project.Title,
+            Description = project.Description,
+            ProjectUrl = project.ProjectUrl,
+            PortfolioUserId = project.PortfolioUserId
+        };
+    }
+
+    private async Task SaveProject(int projectId)
+    {
+        await ProjectService.UpdateProjectAsync(projectId, editingProject);
+        editingProjectId = null;
+        
+        // Invalidate and reload projects cache
+        await UserSession.InvalidateProjectsCache();
+    }
+
+    private void CancelEdit()
+    {
+        editingProjectId = null;
+        editingProject = new();
+    }
+
+    private async Task DeleteProject(int projectId)
+    {
+        if (await ProjectService.DeleteProjectAsync(projectId))
+        {
+            // Invalidate and reload projects cache
+            await UserSession.InvalidateProjectsCache();
+        }
+    }
+
+    private async Task RefreshAllData()
+    {
+        await UserSession.InvalidateAllCache();
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.IsInRole("User"))
+            {
+                await UserSession.LoadCurrentPortfolioUserAsync(true);
+                await UserSession.LoadUserProjectsAsync(true);
+            }
+            else
+            {
+                await UserSession.LoadPortfolioUsersAsync(true);
+                await UserSession.LoadUserProjectsAsync(true);
+            }
+        }
+    }
+
+    // Event handlers from StateAwareComponentBase
+    protected override void OnProjectsChanged(List<Project>? projects)
+    {
+        base.OnProjectsChanged(projects);
+        // Custom logic when projects change
+    }
+}

@@ -27,7 +27,10 @@ namespace SkillSnap.Backend.Controllers
         {
             return await _cacheService.GetOrSetAsync(
                 CacheKeys.ALL_SKILLS,
-                async () => await _context.Skills.Include(s => s.PortfolioUser).ToListAsync(),
+                async () => await _context.Skills
+                    .AsNoTracking()
+                    .Include(s => s.PortfolioUser)
+                    .ToListAsync(),
                 TimeSpan.FromMinutes(15)
             );
         }
@@ -36,7 +39,9 @@ namespace SkillSnap.Backend.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<Skill>> GetSkill(int id)
         {
-            var skill = await _context.Skills.FindAsync(id);
+            var skill = await _context.Skills
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id);
 
             if (skill == null)
             {
@@ -283,6 +288,7 @@ namespace SkillSnap.Backend.Controllers
             return await _cacheService.GetOrSetAsync(
                 "skills:distinct_names",
                 async () => await _context.Skills
+                    .AsNoTracking()
                     .Where(s => !string.IsNullOrEmpty(s.Name))
                     .Select(s => s.Name)
                     .Distinct()
@@ -294,7 +300,7 @@ namespace SkillSnap.Backend.Controllers
 
         private bool SkillExists(int id)
         {
-            return _context.Skills.Any(e => e.Id == id);
+            return _context.Skills.AsNoTracking().Any(e => e.Id == id);
         }
     }
 }

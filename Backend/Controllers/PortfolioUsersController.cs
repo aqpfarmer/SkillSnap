@@ -30,7 +30,11 @@ namespace SkillSnap.Backend.Controllers
         {
             return await _cacheService.GetOrSetAsync(
                 CacheKeys.ALL_PORTFOLIO_USERS,
-                async () => await _context.PortfolioUsers.Include(p => p.Projects).Include(p => p.Skills).ToListAsync(),
+                async () => await _context.PortfolioUsers
+                    .AsNoTracking()
+                    .Include(p => p.Projects)
+                    .Include(p => p.Skills)
+                    .ToListAsync(),
                 TimeSpan.FromMinutes(15)
             );
         }
@@ -43,7 +47,11 @@ namespace SkillSnap.Backend.Controllers
             
             var portfolioUser = await _cacheService.GetOrSetAsync(
                 cacheKey,
-                async () => await _context.PortfolioUsers.Include(p => p.Projects).Include(p => p.Skills).FirstOrDefaultAsync(p => p.Id == id),
+                async () => await _context.PortfolioUsers
+                    .AsNoTracking()
+                    .Include(p => p.Projects)
+                    .Include(p => p.Skills)
+                    .FirstOrDefaultAsync(p => p.Id == id),
                 TimeSpan.FromMinutes(15)
             );
 
@@ -261,7 +269,7 @@ namespace SkillSnap.Backend.Controllers
 
         private bool PortfolioUserExists(int id)
         {
-            return _context.PortfolioUsers.Any(e => e.Id == id);
+            return _context.PortfolioUsers.AsNoTracking().Any(e => e.Id == id);
         }
     }
 }

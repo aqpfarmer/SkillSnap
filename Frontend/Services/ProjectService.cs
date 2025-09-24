@@ -3,7 +3,17 @@ using SkillSnap.Shared.Models;
 
 namespace Frontend.Services
 {
-    public class ProjectService
+    public interface IProjectService
+    {
+        Task<List<Project>> GetAllProjectsAsync();
+        Task<List<Project>> GetMyProjectsAsync();
+        Task<Project?> GetProjectByIdAsync(int id);
+        Task<Project> CreateProjectAsync(Project project);
+        Task<bool> UpdateProjectAsync(int id, Project project);
+        Task<bool> DeleteProjectAsync(int id);
+    }
+
+    public class ProjectService : IProjectService
     {
         private readonly AuthenticatedHttpClientService _httpClientService;
         private readonly JsonSerializerOptions _jsonOptions;

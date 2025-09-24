@@ -17,11 +17,19 @@ SkillSnap serves as a complete portfolio management platform where developers ca
 - **JWT Bearer Token Authentication** - Secure token-based authentication system
 - **Role-Based Access Control (RBAC)** - Three-tier permission system:
   - **👤 User**: View-only access to portfolio data
-  - **🛠️ Manager**: Create, edit, and delete projects and skills
+  - **🛠️ Manager**: Create, edit, and delete projects/skills + **Performance Metrics Access**
   - **🔑 Admin**: Full system access including user management
 - **ASP.NET Core Identity Integration** - Enterprise-grade user management
 - **Automatic Role Assignment** - New users get User role by default
-- **Admin User Seeding** - Pre-configured admin account for system setup
+- **Complete User Seeding** - Pre-configured accounts for all roles (Admin, Manager, User)
+
+### 🚀 Performance & Monitoring
+- **Enterprise-Grade Caching System** - Comprehensive IMemoryCache implementation with circuit breaker pattern
+- **Performance Metrics Dashboard** - Real-time monitoring (Manager role exclusive access)
+- **Database Query Optimization** - .AsNoTracking() and .Include() optimizations tracked by metrics
+- **Circuit Breaker Pattern** - Resilient caching with automatic fallback to database
+- **Load Testing Tools** - Built-in performance simulation and testing capabilities
+- **Metrics Tracking** - Cache hit/miss ratios, query performance, and system health monitoring
 
 ### 👥 User Management
 - **User Registration & Login** - Secure account creation and authentication
@@ -43,11 +51,14 @@ SkillSnap serves as a complete portfolio management platform where developers ca
 - **Role-Based Editing** - Users can edit their own portfolios, Admins can edit any portfolio
 
 ### 🎨 Modern UI/UX
-- **Component-Based Architecture** - Reusable Razor components
+- **Component-Based Architecture** - Reusable Razor components with StateAwareComponentBase
 - **Responsive Design** - Mobile-first responsive layout
-- **Professional Styling** - Modern CSS with hover effects and animations
-- **Role-Based Navigation** - Dynamic menu based on user permissions
+- **Professional Styling** - Modern CSS with Bootstrap Icons and proper spacing
+- **Role-Based Navigation** - Dynamic menu based on user permissions with Manager metrics access
 - **Landing Page Routing** - Smart routing based on authentication state
+- **State Management** - Advanced frontend state management with UserSessionService
+- **Real-Time Dashboard** - Performance metrics with auto-refresh capabilities
+- **Professional Unauthorized Access** - Clean access denied pages with navigation options
 
 ## 🏗️ Architecture & Technology Stack
 
@@ -55,22 +66,27 @@ SkillSnap serves as a complete portfolio management platform where developers ca
 ```
 🔧 Framework: ASP.NET Core 9.0
 🗣️ Language: C# 12
-🏛️ Architecture: MVC/API Controller Pattern
-🔗 ORM: Entity Framework Core
+🏛️ Architecture: MVC/API Controller Pattern with Services Layer
+🔗 ORM: Entity Framework Core with optimized queries (.AsNoTracking/.Include)
 🗄️ Database: SQLite with Code-First Migrations
 🔐 Security: ASP.NET Core Identity + JWT Bearer
 📚 Documentation: Swagger/OpenAPI Integration
 🔄 CORS: Configured for cross-origin requests
+⚡ Caching: Enterprise IMemoryCache with Circuit Breaker pattern
+📊 Monitoring: Real-time performance metrics and analytics
+🔄 Resilience: Automatic retry mechanisms and fallback strategies
 ```
 
 ### Frontend (Blazor WebAssembly)
 ```
 ⚡ Framework: Blazor WebAssembly (.NET 9)
-🧩 Architecture: Component-Based SPA
-🎨 Styling: Modern CSS with Bootstrap Icons
-📱 Responsive: Mobile-first design
-🔄 State Management: AuthenticationStateProvider
-🌐 HTTP Client: Configured for API communication
+🧩 Architecture: Component-Based SPA with StateAware components
+🎨 Styling: Modern CSS with Bootstrap Icons and professional spacing
+📱 Responsive: Mobile-first design with role-based navigation
+🔄 State Management: Advanced UserSessionService + AuthenticationStateProvider
+🌐 HTTP Client: Configured for API communication with authenticated requests
+📊 Real-Time UI: Performance dashboard with auto-refresh capabilities
+🔒 Role-Based Views: Dynamic content based on user permissions (User/Manager/Admin)
 ```
 
 ### Database & Data Management
@@ -99,15 +115,19 @@ SkillSnap/
 ├── 📁 Backend/                    # ASP.NET Core Web API
 │   ├── 📁 Controllers/           # API Controllers
 │   │   ├── 📄 AuthController.cs        # Authentication endpoints
-│   │   ├── 📄 SkillsController.cs      # Skills CRUD operations
-│   │   ├── 📄 ProjectsController.cs    # Projects CRUD operations
+│   │   ├── 📄 SkillsController.cs      # Skills CRUD operations with caching
+│   │   ├── 📄 ProjectsController.cs    # Projects CRUD operations with caching
 │   │   ├── 📄 PortfolioUsersController.cs # User portfolio & role management
+│   │   ├── 📄 MetricsController.cs     # Performance metrics API (Manager role)
+│   │   ├── 📄 CacheController.cs       # Cache management endpoints
 │   │   └── 📄 DebugController.cs       # Development debugging endpoints
-│   ├── 📁 Data/                  # Database context and initialization
-│   │   ├── 📄 SkillSnapContext.cs      # EF Core DbContext
-│   │   └── 📄 DbInitializer.cs         # Database seeding logic
 │   ├── 📁 Services/              # Business logic services
-│   │   └── 📄 JwtService.cs            # JWT token generation/validation
+│   │   ├── 📄 JwtService.cs            # JWT token generation/validation
+│   │   ├── 📄 CacheService.cs          # Enterprise caching with circuit breaker
+│   │   └── 📄 MetricsService.cs        # Performance monitoring and analytics
+│   ├── 📁 Data/                  # Database context and initialization
+│   │   ├── � SkillSnapContext.cs      # EF Core DbContext with optimized queries
+│   │   └── 📄 DbInitializer.cs         # Database seeding (Admin, Manager, User)
 │   ├── 📁 Migrations/            # EF Core database migrations
 │   └── 📄 Program.cs             # Application startup and configuration
 ├── 📁 Frontend/                   # Blazor WebAssembly Client
@@ -118,15 +138,20 @@ SkillSnap/
 │   │   ├── 📄 Skills.razor             # Skills management with profile editing
 │   │   ├── 📄 Projects.razor           # Projects management
 │   │   ├── 📄 Users.razor              # User administration with role management
+│   │   ├── 📄 Metrics.razor            # Performance dashboard (Manager role)
 │   │   ├── 📄 Home.razor               # Authenticated user homepage
 │   │   └── 📄 PublicHome.razor         # Public landing page
 │   ├── 📁 Services/              # Frontend services
 │   │   ├── 📄 AuthService.cs           # Authentication service
+│   │   ├── 📄 UserSessionService.cs    # Advanced state management service
+│   │   ├── 📄 MetricsService.cs        # Performance metrics client service
 │   │   ├── 📄 CustomAuthenticationStateProvider.cs # Auth state management
 │   │   ├── 📄 AuthenticatedHttpClientService.cs # Authenticated HTTP client
 │   │   ├── 📄 SkillService.cs          # Skills API service
 │   │   ├── 📄 ProjectService.cs        # Projects API service
 │   │   └── 📄 PortfolioUserService.cs  # Users & role management API service
+│   ├── 📁 Components/            # Reusable components
+│   │   └── 📄 StateAwareComponentBase.cs # Base component with state management
 │   ├── 📁 Shared/                # Reusable components
 │   │   ├── 📄 ProfileCard.razor        # User profile component
 │   │   ├── 📄 ProjectList.razor        # Project listing component
@@ -186,7 +211,15 @@ dotnet run --project Frontend
 👑 Role: Admin
 ```
 
-### 📊 Demo Account
+### �️ Manager Account (Performance Metrics Access)
+```
+📧 Email: manager@skillsnap.com
+🔑 Password: Manager123!
+📊 Role: Manager
+🎯 Special Access: Performance Metrics Dashboard
+```
+
+### �📊 Demo Account
 ```
 📧 Email: demo@skillsnap.com
 🔑 Password: Demo123!
@@ -204,8 +237,14 @@ dotnet run --project Frontend
 ### For Managers
 - All User capabilities **plus:**
 - **Create new skills** and projects
-- **Edit existing** skills and projects
+- **Edit existing** skills and projects  
 - **Delete** skills and projects
+- **🚀 Exclusive Performance Metrics Access** - Real-time performance dashboard with:
+  - Cache hit/miss ratios and performance statistics
+  - Database query optimization metrics
+  - Circuit breaker status and system health monitoring
+  - Load testing and simulation tools
+  - Auto-refresh capabilities for real-time monitoring
 
 ### For Administrators
 - All Manager capabilities **plus:**
@@ -249,6 +288,9 @@ sequenceDiagram
 | GET `/api/portfoliousers/{id}/role` | ❌ | ❌ | ✅ |
 | PUT `/api/portfoliousers/{id}/role` | ❌ | ❌ | ✅ |
 | POST `/api/auth/create-user` | ❌ | ❌ | ✅ |
+| **GET `/api/metrics`** | **❌** | **✅** | **✅** |
+| **POST `/api/metrics/simulate-load`** | **❌** | **✅** | **✅** |
+| **POST `/api/metrics/test-circuit-breaker`** | **❌** | **✅** | **✅** |
 
 ## 🧪 API Documentation
 
@@ -272,6 +314,16 @@ The API includes comprehensive Swagger documentation available at:
 #### Role Management (Admin Only)
 - `GET /api/portfoliousers/{id}/role` - Get user's current role
 - `PUT /api/portfoliousers/{id}/role` - Update user's role
+
+#### Performance Monitoring (Manager Only)
+- `GET /api/metrics` - Get real-time performance metrics
+- `POST /api/metrics/simulate-load` - Generate load for testing
+- `POST /api/metrics/test-circuit-breaker` - Test circuit breaker functionality
+
+#### Cache Management
+- `GET /api/cache/stats` - Get cache performance statistics
+- `POST /api/cache/clear` - Clear application cache
+- `GET /api/cache/test-circuit-breaker` - Test caching resilience
 
 #### Skills & Projects
 - `GET /api/skills` - Get all skills
@@ -324,15 +376,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Technical Accomplishments
 - ✅ **Full-Stack Architecture** - Complete end-to-end application
-- ✅ **Enterprise Security** - JWT authentication with role-based authorization
+- ✅ **Enterprise Security** - JWT authentication with role-based authorization  
 - ✅ **Advanced User Management** - Complete CRUD with role assignment and profile image handling
 - ✅ **Smart Image Processing** - Google search URL extraction with cache-busting and fallback handling
-- ✅ **Modern Frontend** - Component-based Blazor WebAssembly SPA
+- ✅ **Modern Frontend** - Component-based Blazor WebAssembly SPA with advanced state management
 - ✅ **RESTful API Design** - Clean, well-documented API endpoints with proper authorization
 - ✅ **Database Management** - Code-first migrations, seeding, and Entity Framework optimization
 - ✅ **Professional UI/UX** - Responsive, modern interface design with role-based navigation
 - ✅ **Entity Framework Best Practices** - Proper entity tracking and update conflict resolution
 - ✅ **Security Best Practices** - CORS, HTTPS, secure password hashing, and role-based access control
+- ✅ **🚀 Enterprise-Grade Performance System** - Comprehensive caching with circuit breaker pattern
+- ✅ **📊 Real-Time Monitoring** - Performance metrics dashboard with Manager role exclusive access
+- ✅ **⚡ Database Optimization** - .AsNoTracking() and .Include() optimizations tracked by metrics
+- ✅ **🔄 Resilient Architecture** - Circuit breaker pattern with automatic fallback strategies
+- ✅ **📈 Load Testing Integration** - Built-in performance simulation and testing capabilities
+- ✅ **🎯 Advanced State Management** - Frontend state management with UserSessionService and StateAware components
 
 ### Development Practices
 - 📋 **Clean Code** - Well-organized, readable codebase
@@ -341,7 +399,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📱 **Responsive Design** - Mobile-first approach
 - 🛡️ **Security First** - Security considerations throughout development
 - 🔧 **Maintainable** - Component-based architecture for easy maintenance
+- 📊 **Performance Monitoring** - Real-time metrics and analytics integration
+- 🎯 **Role-Based Development** - Feature development with proper authorization levels
+
+## 📚 Additional Documentation
+
+For detailed Manager user testing and performance metrics information, see:
+- **[Manager User Guide](MANAGER_USER_GUIDE.md)** - Complete guide for Manager role features and performance dashboard testing
 
 ---
 
-**Built with ❤️ by [aqpfarmer](https://github.com/aqpfarmer) using .NET 9, Blazor WebAssembly, and modern web technologies.**
+**Built with ❤️ by [aqpfarmer](https://github.com/aqpfarmer) using .NET 9, Blazor WebAssembly, and enterprise-grade performance monitoring.**

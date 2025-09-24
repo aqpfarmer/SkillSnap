@@ -15,24 +15,36 @@ namespace SkillSnap.Backend.Services
         void RemoveByPrefix(string prefix);
         void Clear();
         Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> getItem, TimeSpan? expiration = null) where T : class;
+        bool IsCircuitBreakerOpen();
+        void ResetCircuitBreaker();
+        (int consecutiveFailures, DateTime lastFailureTime, bool isOpen) GetCircuitBreakerStatus();
     }
 
     public class CacheService : ICacheService
     {
         private readonly IMemoryCache _memoryCache;
         private readonly ILogger<CacheService> _logger;
+        private readonly IMetricsService? _metricsService;
         private readonly HashSet<string> _cacheKeys;
         private readonly SemaphoreSlim _semaphore;
+
+        // Circuit breaker for cache failures
+        private int _consecutiveFailures = 0;
+        private DateTime _lastFailureTime = DateTime.MinValue;
+        private readonly object _circuitBreakerLock = new object();
+        private const int CircuitBreakerThreshold = 5;
+        private static readonly TimeSpan CircuitBreakerTimeout = TimeSpan.FromMinutes(1);
 
         // Default cache expiration times
         private static readonly TimeSpan DefaultExpiration = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan ShortExpiration = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan LongExpiration = TimeSpan.FromHours(1);
 
-        public CacheService(IMemoryCache memoryCache, ILogger<CacheService> logger)
+        public CacheService(IMemoryCache memoryCache, ILogger<CacheService> logger, IMetricsService? metricsService = null)
         {
             _memoryCache = memoryCache;
             _logger = logger;
+            _metricsService = metricsService;
             _cacheKeys = new HashSet<string>();
             _semaphore = new SemaphoreSlim(1, 1);
         }
@@ -42,21 +54,98 @@ namespace SkillSnap.Backend.Services
         /// </summary>
         public T? Get<T>(string key) where T : class
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
+            if (IsCacheCircuitOpen())
+            {
+                _logger.LogDebug("Cache circuit is open, skipping cache for key: {Key}", key);
+                stopwatch.Stop();
+                _metricsService?.TrackCacheMiss(key, stopwatch.Elapsed);
+                return null;
+            }
+
             try
             {
                 if (_memoryCache.TryGetValue(key, out var cachedValue))
                 {
+                    stopwatch.Stop();
                     _logger.LogDebug("Cache hit for key: {Key}", key);
+                    _metricsService?.TrackCacheHit(key, stopwatch.Elapsed);
+                    RecordCacheSuccess();
                     return cachedValue as T;
                 }
 
+                stopwatch.Stop();
                 _logger.LogDebug("Cache miss for key: {Key}", key);
+                _metricsService?.TrackCacheMiss(key, stopwatch.Elapsed);
                 return null;
             }
             catch (Exception ex)
             {
+                stopwatch.Stop();
                 _logger.LogError(ex, "Error retrieving from cache for key: {Key}", key);
+                _metricsService?.TrackCacheMiss(key, stopwatch.Elapsed);
+                RecordCacheFailure();
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Check if the circuit breaker is open (cache is temporarily disabled due to failures)
+        /// </summary>
+        private bool IsCacheCircuitOpen()
+        {
+            lock (_circuitBreakerLock)
+            {
+                if (_consecutiveFailures >= CircuitBreakerThreshold)
+                {
+                    if (DateTime.UtcNow - _lastFailureTime > CircuitBreakerTimeout)
+                    {
+                        // Reset the circuit breaker
+                        _consecutiveFailures = 0;
+                        _logger.LogInformation("Cache circuit breaker reset after timeout");
+                        return false;
+                    }
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Record a cache operation success
+        /// </summary>
+        private void RecordCacheSuccess()
+        {
+            lock (_circuitBreakerLock)
+            {
+                if (_consecutiveFailures > 0)
+                {
+                    _consecutiveFailures = 0;
+                    _logger.LogInformation("Cache circuit breaker reset after successful operation");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Record a cache operation failure
+        /// </summary>
+        private void RecordCacheFailure()
+        {
+            lock (_circuitBreakerLock)
+            {
+                _consecutiveFailures++;
+                _lastFailureTime = DateTime.UtcNow;
+                
+                _metricsService?.TrackCircuitBreakerAction("FAILURE_RECORDED", $"Consecutive failures: {_consecutiveFailures}");
+                
+                if (_consecutiveFailures >= CircuitBreakerThreshold)
+                {
+                    _logger.LogWarning("Cache circuit breaker opened after {FailureCount} consecutive failures. Cache will be bypassed for {Timeout}.", 
+                        _consecutiveFailures, CircuitBreakerTimeout);
+                    
+                    _metricsService?.TrackCircuitBreakerAction("CIRCUIT_OPENED", $"Threshold reached: {_consecutiveFailures} failures");
+                }
             }
         }
 
@@ -65,6 +154,18 @@ namespace SkillSnap.Backend.Services
         /// </summary>
         public void Set<T>(string key, T value, TimeSpan? expiration = null) where T : class
         {
+            if (value == null)
+            {
+                _logger.LogWarning("Attempted to cache null value for key: {Key}", key);
+                return;
+            }
+
+            if (IsCacheCircuitOpen())
+            {
+                _logger.LogDebug("Cache circuit is open, skipping cache set for key: {Key}", key);
+                return;
+            }
+
             try
             {
                 _semaphore.Wait();
@@ -73,7 +174,8 @@ namespace SkillSnap.Backend.Services
                 {
                     AbsoluteExpirationRelativeToNow = expiration ?? DefaultExpiration,
                     SlidingExpiration = TimeSpan.FromMinutes(5), // Extend cache if accessed within 5 minutes
-                    Priority = CacheItemPriority.Normal
+                    Priority = CacheItemPriority.Normal,
+                    Size = 1 // Each cache entry counts as 1 unit towards the SizeLimit
                 };
 
                 // Add eviction callback for cleanup
@@ -93,15 +195,26 @@ namespace SkillSnap.Backend.Services
                     _cacheKeys.Add(key);
                 }
 
+                RecordCacheSuccess();
                 _logger.LogDebug("Cache set for key: {Key}, Expiration: {Expiration}", key, expiration ?? DefaultExpiration);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error setting cache for key: {Key}", key);
+                _logger.LogError(ex, "Error setting cache for key: {Key}. Cache operation will be skipped, but application will continue.", key);
+                RecordCacheFailure();
+                // Don't throw - caching failure shouldn't break the application
             }
             finally
             {
-                _semaphore.Release();
+                try
+                {
+                    _semaphore.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Semaphore was disposed, which is fine during shutdown
+                    _logger.LogDebug("Semaphore was disposed during cache set operation for key: {Key}", key);
+                }
             }
         }
 
@@ -110,6 +223,12 @@ namespace SkillSnap.Backend.Services
         /// </summary>
         public void Remove(string key)
         {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                _logger.LogWarning("Attempted to remove cache entry with null or empty key");
+                return;
+            }
+
             try
             {
                 _semaphore.Wait();
@@ -125,11 +244,19 @@ namespace SkillSnap.Backend.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error removing cache for key: {Key}", key);
+                _logger.LogError(ex, "Error removing cache for key: {Key}. Cache may still contain stale data.", key);
+                // Don't throw - cache removal failure shouldn't break the application
             }
             finally
             {
-                _semaphore.Release();
+                try
+                {
+                    _semaphore.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    _logger.LogDebug("Semaphore was disposed during cache remove operation for key: {Key}", key);
+                }
             }
         }
 
@@ -217,15 +344,126 @@ namespace SkillSnap.Backend.Services
         /// </summary>
         public async Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> getItem, TimeSpan? expiration = null) where T : class
         {
-            var cachedItem = Get<T>(key);
-            if (cachedItem != null)
+            if (IsCacheCircuitOpen())
             {
-                return cachedItem;
+                _logger.LogDebug("Cache circuit is open, bypassing cache for key: {Key}", key);
+                return await getItem();
             }
 
-            var item = await getItem();
-            Set(key, item, expiration);
-            return item;
+            try
+            {
+                // First, try to get from cache
+                var cachedItem = Get<T>(key);
+                if (cachedItem != null)
+                {
+                    return cachedItem;
+                }
+
+                // Cache miss - get from source with retry logic
+                var item = await GetWithFallbackAsync(getItem, key);
+                
+                // Try to cache the result, but don't fail if caching fails or circuit is open
+                try
+                {
+                    if (item != null && !IsCacheCircuitOpen())
+                    {
+                        Set(key, item, expiration);
+                    }
+                }
+                catch (Exception cacheEx)
+                {
+                    _logger.LogWarning(cacheEx, "Failed to cache item for key: {Key}, but continuing with uncached result", key);
+                    RecordCacheFailure();
+                }
+
+                return item;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GetOrSetAsync failed for key: {Key}, attempting fallback", key);
+                RecordCacheFailure();
+                
+                // Final fallback - try to get data directly without caching
+                try
+                {
+                    return await getItem();
+                }
+                catch (Exception fallbackEx)
+                {
+                    _logger.LogError(fallbackEx, "Fallback also failed for key: {Key}", key);
+                    throw; // Re-throw the original exception
+                }
+            }
+        }
+
+        /// <summary>
+        /// Check if the circuit breaker is currently open
+        /// </summary>
+        public bool IsCircuitBreakerOpen()
+        {
+            return IsCacheCircuitOpen();
+        }
+
+        /// <summary>
+        /// Manually reset the circuit breaker (useful for admin operations)
+        /// </summary>
+        public void ResetCircuitBreaker()
+        {
+            lock (_circuitBreakerLock)
+            {
+                _consecutiveFailures = 0;
+                _lastFailureTime = DateTime.MinValue;
+                _logger.LogInformation("Cache circuit breaker manually reset");
+            }
+        }
+
+        /// <summary>
+        /// Get detailed circuit breaker status information
+        /// </summary>
+        public (int consecutiveFailures, DateTime lastFailureTime, bool isOpen) GetCircuitBreakerStatus()
+        {
+            lock (_circuitBreakerLock)
+            {
+                return (_consecutiveFailures, _lastFailureTime, IsCacheCircuitOpen());
+            }
+        }
+
+        /// <summary>
+        /// Get data with retry and fallback logic
+        /// </summary>
+        private async Task<T> GetWithFallbackAsync<T>(Func<Task<T>> getItem, string key) where T : class
+        {
+            const int maxRetries = 3;
+            const int baseDelayMs = 100;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    var result = await getItem();
+                    if (attempt > 1)
+                    {
+                        _logger.LogInformation("Successfully retrieved data for key: {Key} on attempt {Attempt}", key, attempt);
+                    }
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    if (attempt == maxRetries)
+                    {
+                        _logger.LogError(ex, "Failed to retrieve data for key: {Key} after {MaxRetries} attempts", key, maxRetries);
+                        throw;
+                    }
+
+                    var delay = TimeSpan.FromMilliseconds(baseDelayMs * Math.Pow(2, attempt - 1)); // Exponential backoff
+                    _logger.LogWarning(ex, "Attempt {Attempt} failed for key: {Key}, retrying in {Delay}ms", attempt, key, delay.TotalMilliseconds);
+                    
+                    await Task.Delay(delay);
+                }
+            }
+
+            // This should never be reached, but just in case
+            throw new InvalidOperationException($"Unexpected state in GetWithFallbackAsync for key: {key}");
         }
     }
 

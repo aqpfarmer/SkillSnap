@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillSnap.Backend.Data;
 using SkillSnap.Backend.Services;
 using SkillSnap.Shared.Models;
+using static SkillSnap.Backend.Services.CacheKeys;
 
 namespace SkillSnap.Backend.Controllers
 {
@@ -14,11 +15,13 @@ namespace SkillSnap.Backend.Controllers
     {
         private readonly SkillSnapContext _context;
         private readonly ICacheService _cacheService;
+        private readonly IMetricsService? _metricsService;
 
-        public ProjectsController(SkillSnapContext context, ICacheService cacheService)
+        public ProjectsController(SkillSnapContext context, ICacheService cacheService, IMetricsService? metricsService = null)
         {
             _context = context;
             _cacheService = cacheService;
+            _metricsService = metricsService;
         }
 
         // GET: api/Projects
@@ -27,7 +30,16 @@ namespace SkillSnap.Backend.Controllers
         {
             return await _cacheService.GetOrSetAsync(
                 CacheKeys.ALL_PROJECTS,
-                async () => await _context.Projects.Include(p => p.PortfolioUser).ToListAsync(),
+                async () => {
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    var result = await _context.Projects
+                        .AsNoTracking()
+                        .Include(p => p.PortfolioUser)
+                        .ToListAsync();
+                    stopwatch.Stop();
+                    _metricsService?.TrackDatabaseQuery("GetAllProjects", stopwatch.Elapsed, result.Count);
+                    return result;
+                },
                 TimeSpan.FromMinutes(15)
             );
         }
@@ -40,7 +52,10 @@ namespace SkillSnap.Backend.Controllers
             
             var project = await _cacheService.GetOrSetAsync(
                 cacheKey,
-                async () => await _context.Projects.Include(p => p.PortfolioUser).FirstOrDefaultAsync(p => p.Id == id),
+                async () => await _context.Projects
+                    .AsNoTracking()
+                    .Include(p => p.PortfolioUser)
+                    .FirstOrDefaultAsync(p => p.Id == id),
                 TimeSpan.FromMinutes(15)
             );
 
@@ -67,6 +82,7 @@ namespace SkillSnap.Backend.Controllers
             var projects = await _cacheService.GetOrSetAsync(
                 cacheKey,
                 async () => await _context.Projects
+                    .AsNoTracking()
                     .Include(p => p.PortfolioUser)
                     .Where(p => p.PortfolioUser != null && p.PortfolioUser.ApplicationUserId == userId)
                     .ToListAsync(),
@@ -212,7 +228,7 @@ namespace SkillSnap.Backend.Controllers
 
         private bool ProjectExists(int id)
         {
-            return _context.Projects.Any(e => e.Id == id);
+            return _context.Projects.AsNoTracking().Any(e => e.Id == id);
         }
     }
 }

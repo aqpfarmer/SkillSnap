@@ -46,6 +46,8 @@ namespace SkillSnap.Backend.Controllers
         [HttpGet("status")]
         public ActionResult GetCacheStatus()
         {
+            var circuitBreakerStatus = _cacheService.GetCircuitBreakerStatus();
+            
             return Ok(new
             {
                 message = "Cache service is running",
@@ -57,6 +59,13 @@ namespace SkillSnap.Backend.Controllers
                     maxEntries = 1024,
                     compactionPercentage = "20%"
                 },
+                circuitBreaker = new
+                {
+                    isOpen = circuitBreakerStatus.isOpen,
+                    consecutiveFailures = circuitBreakerStatus.consecutiveFailures,
+                    lastFailureTime = circuitBreakerStatus.lastFailureTime == DateTime.MinValue ? (DateTime?)null : circuitBreakerStatus.lastFailureTime,
+                    status = circuitBreakerStatus.isOpen ? "OPEN (Cache Disabled)" : "CLOSED (Cache Active)"
+                },
                 availablePrefixes = new[]
                 {
                     CacheKeys.PORTFOLIO_USERS_PREFIX,
@@ -65,6 +74,17 @@ namespace SkillSnap.Backend.Controllers
                     CacheKeys.USER_ROLES_PREFIX
                 }
             });
+        }
+
+        /// <summary>
+        /// Reset the circuit breaker (Admin only)
+        /// </summary>
+        [HttpPost("circuit-breaker/reset")]
+        public ActionResult ResetCircuitBreaker()
+        {
+            _cacheService.ResetCircuitBreaker();
+            _logger.LogInformation("Cache circuit breaker reset by admin user: {UserId}", User.Identity?.Name);
+            return Ok(new { message = "Circuit breaker reset successfully", timestamp = DateTime.UtcNow });
         }
     }
 }

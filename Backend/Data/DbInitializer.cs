@@ -17,6 +17,9 @@ namespace SkillSnap.Backend.Data
             // Create admin user if it doesn't exist
             await CreateAdminUserAsync(userManager, context);
 
+            // Create manager user if it doesn't exist
+            await CreateManagerUserAsync(userManager, context);
+
             // Seed portfolio data if needed
             await SeedPortfolioDataAsync(context, userManager);
         }
@@ -76,10 +79,52 @@ namespace SkillSnap.Backend.Data
             }
         }
 
+        private static async Task CreateManagerUserAsync(UserManager<ApplicationUser> userManager, SkillSnapContext context)
+        {
+            // Check if manager user already exists
+            var managerUser = await userManager.FindByEmailAsync("manager@skillsnap.com");
+            if (managerUser == null)
+            {
+                // Create manager user
+                managerUser = new ApplicationUser
+                {
+                    UserName = "manager@skillsnap.com",
+                    Email = "manager@skillsnap.com",
+                    FirstName = "Manager",
+                    LastName = "User",
+                    EmailConfirmed = true
+                };
+
+                var result = await userManager.CreateAsync(managerUser, "Manager123!"); // Strong password for manager
+
+                if (result.Succeeded)
+                {
+                    // Assign Manager role
+                    await userManager.AddToRoleAsync(managerUser, "Manager");
+
+                    // Create portfolio for manager
+                    var managerPortfolio = new PortfolioUser
+                    {
+                        Name = "Performance Manager",
+                        Bio = "Performance metrics manager with access to system analytics and performance dashboards.",
+                        ProfileImageUrl = "https://via.placeholder.com/150?text=MGR",
+                        ApplicationUserId = managerUser.Id
+                    };
+
+                    context.PortfolioUsers.Add(managerPortfolio);
+                    await context.SaveChangesAsync();
+
+                    // Update manager user with portfolio reference
+                    managerUser.PortfolioUserId = managerPortfolio.Id;
+                    await userManager.UpdateAsync(managerUser);
+                }
+            }
+        }
+
         private static async Task SeedPortfolioDataAsync(SkillSnapContext context, UserManager<ApplicationUser> userManager)
         {
-            // Only seed if there are no portfolio users (excluding admin)
-            if (context.PortfolioUsers.Count() > 1) // More than just admin
+            // Only seed if there are no portfolio users (excluding admin and manager)
+            if (context.PortfolioUsers.Count() > 2) // More than just admin and manager
             {
                 return; // DB has been seeded
             }

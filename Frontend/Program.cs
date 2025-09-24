@@ -16,9 +16,13 @@ builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStat
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<AuthenticatedHttpClientService>();
 
-// Register existing services
-builder.Services.AddScoped<ProjectService>();
-builder.Services.AddScoped<SkillService>();
-builder.Services.AddScoped<PortfolioUserService>();
+// Register services with interfaces
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<ISkillService, SkillService>();
+builder.Services.AddScoped<IPortfolioUserService, PortfolioUserService>();
+builder.Services.AddScoped<Frontend.Services.IMetricsService, Frontend.Services.MetricsService>();
+
+// Register state management service as Scoped (not Singleton due to HttpClient dependency)
+builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 
 await builder.Build().RunAsync();

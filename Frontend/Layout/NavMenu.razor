@@ -24,12 +24,12 @@
                 </div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+                        <span class="bi bi-house-door-fill" aria-hidden="true"></span> Dashboard
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="home">
-                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Public Home
+                        <span class="bi bi-house-door" aria-hidden="true"></span> Public Home
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
@@ -47,6 +47,16 @@
                         <span class="bi bi-people-fill" aria-hidden="true"></span> Portfolio Users
                     </NavLink>
                 </div>
+                
+                <!-- Performance Metrics - Manager Only -->
+                @if (context.User.IsInRole("Manager"))
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="metrics">
+                            <span class="bi bi-speedometer2" aria-hidden="true"></span> Performance Metrics
+                        </NavLink>
+                    </div>
+                }
 
                 <!-- User Info and Logout -->
                 <div class="nav-item px-3 mt-3 pt-3 border-top">
@@ -61,7 +71,7 @@
             <NotAuthorized>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                        <span class="bi bi-house-door-fill" aria-hidden="true"></span> Home
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">

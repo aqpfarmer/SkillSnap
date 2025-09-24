@@ -1,0 +1,22 @@
+# Test Cache Circuit Breaker Functionality
+
+### Test 1: Check initial cache status (should be closed/active)
+GET http://localhost:5282/api/cache/status
+Content-Type: application/json
+# Note: This requires admin authentication - for testing only
+
+### Test 2: Get all portfolio users (should populate cache)
+GET http://localhost:5282/api/portfoliousers
+Content-Type: application/json
+
+### Test 3: Get all portfolio users again (should hit cache)
+GET http://localhost:5282/api/portfoliousers
+Content-Type: application/json
+
+### Test 4: Reset circuit breaker (admin only)
+POST http://localhost:5282/api/cache/circuit-breaker/reset
+Content-Type: application/json
+
+### Test 5: Clear all cache (admin only)
+POST http://localhost:5282/api/cache/clear
+Content-Type: application/json

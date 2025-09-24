@@ -2,9 +2,11 @@
 @using SkillSnap.Shared.Models
 @using Frontend.Services
 @using Frontend.Shared
+@using Frontend.Components
 @using Microsoft.AspNetCore.Components.Authorization
-@inject ProjectService ProjectService
-@inject PortfolioUserService PortfolioUserService
+@inherits StateAwareComponentBase
+@inject IProjectService ProjectService
+@inject IPortfolioUserService PortfolioUserService
 @inject IAuthService AuthService
 
 <h3>Manage Projects</h3>

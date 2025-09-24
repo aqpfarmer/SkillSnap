@@ -3,7 +3,17 @@ using SkillSnap.Shared.Models;
 
 namespace Frontend.Services
 {
-    public class SkillService
+    public interface ISkillService
+    {
+        Task<List<Skill>> GetAllSkillsAsync();
+        Task<Skill?> GetSkillByIdAsync(int id);
+        Task<Skill> CreateSkillAsync(Skill skill);
+        Task<bool> UpdateSkillAsync(int id, Skill skill);
+        Task<bool> DeleteSkillAsync(int id);
+        Task<List<string>> GetDistinctSkillNamesAsync();
+    }
+
+    public class SkillService : ISkillService
     {
         private readonly AuthenticatedHttpClientService _httpClientService;
         private readonly JsonSerializerOptions _jsonOptions;

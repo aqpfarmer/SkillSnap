@@ -1,0 +1,432 @@
+@page "/metrics"
+@using Frontend.Services
+@inject IMetricsService MetricsService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Manager")]
+
+<PageTitle>Performance Metrics - SkillSnap</PageTitle>
+
+<AuthorizeView Roles="Manager" Context="authContext">
+    <Authorized>
+        <div class="metrics-container">
+            <div class="metrics-header">
+                <h1>📊 Performance Metrics Dashboard</h1>
+                <p class="lead">Real-time monitoring of caching performance, database queries, and system health</p>
+                <div class="manager-badge">
+                    <span class="badge bg-primary">Manager Access</span>
+                </div>
+                
+                <div class="metrics-actions">
+            <button class="btn btn-primary" @onclick="RefreshMetrics">
+                <i class="fas fa-sync-alt"></i> Refresh Data
+            </button>
+            <button class="btn btn-secondary" @onclick="SimulateLoad">
+                <i class="fas fa-bolt"></i> Simulate Load
+            </button>
+            <button class="btn btn-warning" @onclick="TestCircuitBreaker">
+                <i class="fas fa-exclamation-triangle"></i> Test Circuit Breaker
+            </button>
+            <button class="btn btn-danger" @onclick="ResetMetrics">
+                <i class="fas fa-trash"></i> Reset Metrics
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading metrics...</span>
+            </div>
+            <p>Loading performance data...</p>
+        </div>
+    }
+    else if (metrics == null)
+    {
+        <div class="alert alert-warning">
+            <h4>⚠️ Unable to Load Metrics</h4>
+            <p>Could not retrieve performance data from the backend. Please ensure the backend service is running.</p>
+            <button class="btn btn-outline-primary" @onclick="RefreshMetrics">Try Again</button>
+        </div>
+    }
+    else
+    {
+        <!-- System Overview -->
+        <div class="metrics-grid">
+            <div class="metric-card system-overview">
+                <h3>🖥️ System Overview</h3>
+                <div class="metric-details">
+                    <div class="metric-item">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value">@FormatUptime(metrics.Uptime)</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Machine:</span>
+                        <span class="metric-value">@metrics.SystemInfo.MachineName</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Processors:</span>
+                        <span class="metric-value">@metrics.SystemInfo.ProcessorCount cores</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Working Set:</span>
+                        <span class="metric-value">@FormatBytes(metrics.SystemInfo.WorkingSet)</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">GC Memory:</span>
+                        <span class="metric-value">@FormatBytes(metrics.SystemInfo.GCMemory)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Circuit Breaker Status -->
+            <div class="metric-card circuit-breaker @(metrics.CircuitBreakerStatus.IsOpen ? "circuit-open" : "circuit-closed")">
+                <h3>⚡ Circuit Breaker</h3>
+                <div class="circuit-status">
+                    <div class="status-indicator @(metrics.CircuitBreakerStatus.IsOpen ? "status-open" : "status-closed")">
+                        @metrics.CircuitBreakerStatus.Status
+                    </div>
+                    <div class="circuit-details">
+                        <div class="metric-item">
+                            <span class="metric-label">Failures:</span>
+                            <span class="metric-value">@metrics.CircuitBreakerStatus.ConsecutiveFailures</span>
+                        </div>
+                        @if (metrics.CircuitBreakerStatus.LastFailureTime != DateTime.MinValue)
+                        {
+                            <div class="metric-item">
+                                <span class="metric-label">Last Failure:</span>
+                                <span class="metric-value">@metrics.CircuitBreakerStatus.LastFailureTime.ToString("HH:mm:ss")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cache Performance Summary -->
+        @if (cacheSummary != null)
+        {
+            <div class="metric-card cache-summary">
+                <h3>🗄️ Cache Performance Summary</h3>
+                <div class="summary-stats">
+                    <div class="summary-stat">
+                        <div class="stat-number">@cacheSummary.TotalRequests</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                    <div class="summary-stat success">
+                        <div class="stat-number">@cacheSummary.TotalHits</div>
+                        <div class="stat-label">Cache Hits</div>
+                    </div>
+                    <div class="summary-stat warning">
+                        <div class="stat-number">@cacheSummary.TotalMisses</div>
+                        <div class="stat-label">Cache Misses</div>
+                    </div>
+                    <div class="summary-stat primary">
+                        <div class="stat-number">@cacheSummary.OverallHitRate.ToString("F1")%</div>
+                        <div class="stat-label">Hit Rate</div>
+                    </div>
+                </div>
+                
+                @if (cacheSummary.CategoriesWithBestHitRate.Any())
+                {
+                    <div class="top-performers">
+                        <h4>🏆 Best Performing Categories</h4>
+                        @foreach (var category in cacheSummary.CategoriesWithBestHitRate)
+                        {
+                            <div class="performer-item">
+                                <span class="category-name">@category.Category</span>
+                                <span class="hit-rate">@category.HitRate% hit rate</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Detailed Cache Metrics -->
+        @if (metrics.CacheMetrics.Any())
+        {
+            <div class="metric-card cache-details">
+                <h3>📈 Cache Performance by Category</h3>
+                <div class="cache-grid">
+                    @foreach (var cache in metrics.CacheMetrics)
+                    {
+                        <div class="cache-category">
+                            <h4>@cache.Category</h4>
+                            <div class="cache-stats">
+                                <div class="cache-stat">
+                                    <div class="hit-rate-circle @GetHitRateClass(cache.HitRate)">
+                                        @cache.HitRate.ToString("F1")%
+                                    </div>
+                                    <div class="stat-details">
+                                        <div>@cache.TotalRequests total requests</div>
+                                        <div class="success-text">@cache.Hits hits</div>
+                                        <div class="warning-text">@cache.Misses misses</div>
+                                    </div>
+                                </div>
+                                <div class="timing-stats">
+                                    <div class="timing-item">
+                                        <span class="timing-label">Avg Hit Time:</span>
+                                        <span class="timing-value">@cache.AverageHitTime.ToString("F2")ms</span>
+                                    </div>
+                                    <div class="timing-item">
+                                        <span class="timing-label">Avg Miss Time:</span>
+                                        <span class="timing-value">@cache.AverageMissTime.ToString("F2")ms</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Database Query Metrics -->
+        @if (metrics.QueryMetrics.Any())
+        {
+            <div class="metric-card query-metrics">
+                <h3>🗃️ Database Query Performance</h3>
+                <div class="query-table">
+                    <div class="query-header">
+                        <div>Operation</div>
+                        <div>Count</div>
+                        <div>Avg Time</div>
+                        <div>Avg Results</div>
+                        <div>Total Time</div>
+                    </div>
+                    @foreach (var query in metrics.QueryMetrics.OrderBy(q => q.AverageTime))
+                    {
+                        <div class="query-row @GetQueryPerformanceClass(query.AverageTime)">
+                            <div class="query-operation">@query.Operation</div>
+                            <div class="query-count">@query.Count</div>
+                            <div class="query-avg-time">@query.AverageTime.ToString("F2")ms</div>
+                            <div class="query-avg-results">@query.AverageResults.ToString("F1")</div>
+                            <div class="query-total-time">@query.TotalTime.TotalMilliseconds.ToString("F0")ms</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Circuit Breaker Events -->
+        @if (metrics.CircuitBreakerEvents.Any())
+        {
+            <div class="metric-card circuit-events">
+                <h3>⚠️ Recent Circuit Breaker Events</h3>
+                <div class="events-list">
+                    @foreach (var evt in metrics.CircuitBreakerEvents.OrderByDescending(e => e.Timestamp).Take(10))
+                    {
+                        <div class="event-item @GetEventClass(evt.Action)">
+                            <div class="event-timestamp">@evt.Timestamp.ToString("HH:mm:ss")</div>
+                            <div class="event-action">@evt.Action</div>
+                            <div class="event-reason">@evt.Reason</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="metrics-footer">
+            <p>Last Updated: @metrics.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+            <p class="text-muted">Metrics are tracked in real-time and reset when the application restarts.</p>
+        </div>
+    }
+</div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="unauthorized-container">
+            <div class="unauthorized-content">
+                <h1>🔒 Access Restricted</h1>
+                <h2>Manager Authorization Required</h2>
+                <p class="lead">
+                    The Performance Metrics dashboard is restricted to users with Manager role privileges.
+                </p>
+                <div class="access-info">
+                    <div class="info-card">
+                        <h4>📊 Performance Metrics</h4>
+                        <p>This dashboard provides comprehensive monitoring of:</p>
+                        <ul>
+                            <li>Cache performance and hit rates</li>
+                            <li>Database query optimization metrics</li>
+                            <li>Circuit breaker status and events</li>
+                            <li>System health and resource usage</li>
+                        </ul>
+                    </div>
+                    <div class="info-card">
+                        <h4>👤 Access Requirements</h4>
+                        <p>To access performance metrics, you need:</p>
+                        <ul>
+                            <li><strong>Manager role</strong> assigned to your account</li>
+                            <li>Valid authentication credentials</li>
+                            <li>Administrative privileges</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="access-actions">
+                    <button class="btn btn-primary" @onclick="NavigateToLogin">
+                        <span class="bi bi-box-arrow-in-right"></span> Login with Manager Account
+                    </button>
+                    <button class="btn btn-secondary" @onclick="NavigateToHome">
+                        <span class="bi bi-house-door"></span> Return to Dashboard
+                    </button>
+                </div>
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private MetricsData? metrics;
+    private CacheSummary? cacheSummary;
+    private bool isLoading = true;
+    private Timer? refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshMetrics();
+        
+        // Auto-refresh every 10 seconds
+        refreshTimer = new Timer(async _ => await InvokeAsync(RefreshMetrics), null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    private async Task RefreshMetrics()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var metricsTask = MetricsService.GetMetricsAsync();
+            var summaryTask = MetricsService.GetCacheSummaryAsync();
+
+            await Task.WhenAll(metricsTask, summaryTask);
+
+            metrics = await metricsTask;
+            cacheSummary = await summaryTask;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing metrics: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SimulateLoad()
+    {
+        try
+        {
+            await MetricsService.SimulateLoadAsync(20);
+            await Task.Delay(1000); // Wait a second for metrics to be recorded
+            await RefreshMetrics();
+            await JSRuntime.InvokeVoidAsync("alert", "Load simulation completed! Check the updated metrics.");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error simulating load: {ex.Message}");
+        }
+    }
+
+    private async Task TestCircuitBreaker()
+    {
+        try
+        {
+            await MetricsService.TestCircuitBreakerAsync();
+            await Task.Delay(500);
+            await RefreshMetrics();
+            await JSRuntime.InvokeVoidAsync("alert", "Circuit breaker test completed! Check the events section.");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error testing circuit breaker: {ex.Message}");
+        }
+    }
+
+    private async Task ResetMetrics()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to reset all metrics data?");
+        if (confirmed)
+        {
+            try
+            {
+                await MetricsService.ResetMetricsAsync();
+                await RefreshMetrics();
+                await JSRuntime.InvokeVoidAsync("alert", "Metrics reset successfully!");
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error resetting metrics: {ex.Message}");
+            }
+        }
+    }
+
+    private string FormatUptime(TimeSpan uptime)
+    {
+        if (uptime.TotalDays >= 1)
+            return $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
+        else if (uptime.TotalHours >= 1)
+            return $"{uptime.Hours}h {uptime.Minutes}m {uptime.Seconds}s";
+        else
+            return $"{uptime.Minutes}m {uptime.Seconds}s";
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number = number / 1024;
+            counter++;
+        }
+        return $"{number:F1} {suffixes[counter]}";
+    }
+
+    private string GetHitRateClass(double hitRate)
+    {
+        if (hitRate >= 80) return "excellent";
+        if (hitRate >= 60) return "good";
+        if (hitRate >= 40) return "fair";
+        return "poor";
+    }
+
+    private string GetQueryPerformanceClass(double avgTime)
+    {
+        if (avgTime <= 10) return "excellent";
+        if (avgTime <= 50) return "good";
+        if (avgTime <= 100) return "fair";
+        return "poor";
+    }
+
+    private string GetEventClass(string action)
+    {
+        return action.ToLower() switch
+        {
+            var a when a.Contains("failure") || a.Contains("error") => "event-error",
+            var a when a.Contains("opened") || a.Contains("warning") => "event-warning",
+            var a when a.Contains("closed") || a.Contains("success") => "event-success",
+            _ => "event-info"
+        };
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+
+    private void NavigateToLogin()
+    {
+        Navigation.NavigateTo("/login");
+    }
+
+    private void NavigateToHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

@@ -63,6 +63,9 @@ builder.Services.AddAuthentication(options =>
 // Register JWT service
 builder.Services.AddScoped<IJwtService, JwtService>();
 
+// Register Metrics Service (as Singleton to persist metrics across requests)
+builder.Services.AddSingleton<IMetricsService, MetricsService>();
+
 // Configure Memory Cache with optimization settings
 builder.Services.AddMemoryCache(options =>
 {
