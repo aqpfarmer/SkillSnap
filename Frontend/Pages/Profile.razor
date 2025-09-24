@@ -1,0 +1,280 @@
+@page "/profile"
+@using SkillSnap.Shared.Models
+@using Frontend.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using System.IdentityModel.Tokens.Jwt
+@using System.Security.Claims
+@attribute [Authorize]
+@inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Profile - SkillSnap</PageTitle>
+
+<div class="profile-container">
+    <div class="profile-header">
+        <h1>My Profile</h1>
+        <p class="subtitle">View your account information, roles, and authentication details</p>
+    </div>
+
+    @if (currentUser != null)
+    {
+        <div class="profile-content">
+            <!-- User Information Card -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h3><i class="bi bi-person-fill"></i> User Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Full Name:</label>
+                            <span>@currentUser.FirstName @currentUser.LastName</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Email:</label>
+                            <span>@currentUser.Email</span>
+                        </div>
+                        <div class="info-item">
+                            <label>User ID:</label>
+                            <span>@currentUser.Id</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Portfolio ID:</label>
+                            <span>@(currentUser.PortfolioUserId?.ToString() ?? "Not assigned")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Roles Card -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h3><i class="bi bi-shield-check"></i> User Roles</h3>
+                </div>
+                <div class="card-body">
+                    @if (userRoles.Any())
+                    {
+                        <div class="roles-container">
+                            @foreach (var role in userRoles)
+                            {
+                                <span class="role-badge role-@role.ToLower()">@role</span>
+                            }
+                        </div>
+                        <div class="role-descriptions">
+                            @foreach (var role in userRoles)
+                            {
+                                <div class="role-description">
+                                    <strong>@role:</strong>
+                                    @switch (role.ToLower())
+                                    {
+                                        case "admin":
+                                            <span>Full system access including user management</span>
+                                            break;
+                                        case "manager":
+                                            <span>Can create, edit, and delete projects and skills</span>
+                                            break;
+                                        case "user":
+                                            <span>View-only access to all portfolio data</span>
+                                            break;
+                                        default:
+                                            <span>Custom role with specific permissions</span>
+                                            break;
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="no-roles">No roles assigned</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Token Information Card -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h3><i class="bi bi-key-fill"></i> Authentication Token</h3>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(token))
+                    {
+                        <div class="token-info">
+                            <div class="info-item">
+                                <label>Token Type:</label>
+                                <span>JWT Bearer Token</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Issued At:</label>
+                                <span>@tokenIssuedAt.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Expires At:</label>
+                                <span class="@(tokenExpiresAt < DateTime.UtcNow ? "text-danger" : "")">
+                                    @tokenExpiresAt.ToString("yyyy-MM-dd HH:mm:ss UTC")
+                                    @if (tokenExpiresAt < DateTime.UtcNow)
+                                    {
+                                        <span class="badge badge-danger">EXPIRED</span>
+                                    }
+                                </span>
+                            </div>
+                            <div class="info-item">
+                                <label>Time Until Expiry:</label>
+                                <span class="@(timeUntilExpiry.TotalHours < 24 ? "text-warning" : "")">
+                                    @if (timeUntilExpiry.TotalSeconds > 0)
+                                    {
+                                        @($"{timeUntilExpiry.Days}d {timeUntilExpiry.Hours}h {timeUntilExpiry.Minutes}m")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-danger">Token Expired</span>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="token-section">
+                            <div class="token-header">
+                                <label>Raw Token:</label>
+                                <button class="btn btn-sm btn-secondary" @onclick="ToggleTokenVisibility">
+                                    @(showToken ? "Hide" : "Show") Token
+                                </button>
+                            </div>
+                            @if (showToken)
+                            {
+                                <div class="token-display">
+                                    <pre>@token</pre>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CopyToken">
+                                        <i class="bi bi-clipboard"></i> Copy Token
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Token Claims -->
+                        <div class="claims-section">
+                            <h4>Token Claims</h4>
+                            @if (tokenClaims.Any())
+                            {
+                                <div class="claims-list">
+                                    @foreach (var claim in tokenClaims)
+                                    {
+                                        <div class="claim-item">
+                                            <span class="claim-type">@claim.Type:</span>
+                                            <span class="claim-value">@claim.Value</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="no-claims">No claims found in token</p>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="no-token">No authentication token found</p>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <p>Loading profile information...</p>
+        </div>
+    }
+</div>
+
+@code {
+    private UserDto? currentUser;
+    private List<string> userRoles = new();
+    private string? token;
+    private bool showToken = false;
+    private DateTime tokenIssuedAt;
+    private DateTime tokenExpiresAt;
+    private TimeSpan timeUntilExpiry;
+    private List<Claim> tokenClaims = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserProfile();
+    }
+
+    private async Task LoadUserProfile()
+    {
+        try
+        {
+            // Get current user information
+            currentUser = await AuthService.GetCurrentUserAsync();
+            
+            // Get authentication state for roles
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                userRoles = authState.User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+            }
+
+            // Get and parse token
+            token = await AuthService.GetTokenAsync();
+            if (!string.IsNullOrEmpty(token))
+            {
+                ParseTokenInformation();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error - could show error message
+            Console.WriteLine($"Error loading profile: {ex.Message}");
+        }
+    }
+
+    private void ParseTokenInformation()
+    {
+        if (string.IsNullOrEmpty(token)) return;
+
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+
+            tokenIssuedAt = jwtToken.IssuedAt;
+            tokenExpiresAt = jwtToken.ValidTo;
+            timeUntilExpiry = tokenExpiresAt - DateTime.UtcNow;
+            
+            tokenClaims = jwtToken.Claims.ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error parsing token: {ex.Message}");
+        }
+    }
+
+    private void ToggleTokenVisibility()
+    {
+        showToken = !showToken;
+    }
+
+    private async Task CopyToken()
+    {
+        if (!string.IsNullOrEmpty(token))
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", token);
+                // Could show success message
+            }
+            catch (Exception)
+            {
+                // Fallback for browsers that don't support clipboard API
+                Console.WriteLine("Copy to clipboard not supported");
+            }
+        }
+    }
+}

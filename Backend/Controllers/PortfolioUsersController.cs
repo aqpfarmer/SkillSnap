@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillSnap.Backend.Data;
@@ -7,13 +9,16 @@ namespace SkillSnap.Backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // Require authentication for all endpoints
     public class PortfolioUsersController : ControllerBase
     {
         private readonly SkillSnapContext _context;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public PortfolioUsersController(SkillSnapContext context)
+        public PortfolioUsersController(SkillSnapContext context, UserManager<ApplicationUser> userManager)
         {
             _context = context;
+            _userManager = userManager;
         }
 
         // GET: api/PortfolioUsers
@@ -37,6 +42,57 @@ namespace SkillSnap.Backend.Controllers
             return portfolioUser;
         }
 
+        // GET: api/PortfolioUsers/me
+        [HttpGet("me")]
+        public async Task<ActionResult<PortfolioUser>> GetMyPortfolioUser()
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            var portfolioUser = await _context.PortfolioUsers
+                .Include(p => p.Projects)
+                .Include(p => p.Skills)
+                .FirstOrDefaultAsync(p => p.ApplicationUserId == userId);
+
+            if (portfolioUser == null)
+            {
+                // Auto-create portfolio if it doesn't exist
+                var applicationUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+                if (applicationUser == null)
+                {
+                    return Unauthorized("User not found");
+                }
+
+                // Create a new portfolio for the user
+                portfolioUser = new PortfolioUser
+                {
+                    Name = $"{applicationUser.FirstName} {applicationUser.LastName}".Trim(),
+                    Bio = "Welcome to SkillSnap! Start building your portfolio by adding your skills and projects.",
+                    ProfileImageUrl = "https://via.placeholder.com/150?text=User",
+                    ApplicationUserId = applicationUser.Id
+                };
+
+                _context.PortfolioUsers.Add(portfolioUser);
+                await _context.SaveChangesAsync();
+
+                // Update application user with portfolio reference
+                applicationUser.PortfolioUserId = portfolioUser.Id;
+                _context.Users.Update(applicationUser);
+                await _context.SaveChangesAsync();
+
+                // Reload with includes
+                portfolioUser = await _context.PortfolioUsers
+                    .Include(p => p.Projects)
+                    .Include(p => p.Skills)
+                    .FirstOrDefaultAsync(p => p.Id == portfolioUser.Id);
+            }
+
+            return portfolioUser!;
+        }
+
         // PUT: api/PortfolioUsers/5
         [HttpPut("{id}")]
         public async Task<IActionResult> PutPortfolioUser(int id, PortfolioUser portfolioUser)
@@ -46,7 +102,30 @@ namespace SkillSnap.Backend.Controllers
                 return BadRequest();
             }
 
-            _context.Entry(portfolioUser).State = EntityState.Modified;
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var isAdmin = User.IsInRole("Admin");
+            
+            // Allow users to edit their own portfolio, or admins to edit any portfolio
+            if (!isAdmin)
+            {
+                var existingPortfolioUser = await _context.PortfolioUsers.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+                if (existingPortfolioUser?.ApplicationUserId != userId)
+                {
+                    return Forbid("You can only edit your own portfolio");
+                }
+            }
+
+            // Update the entity properly to avoid tracking conflicts
+            var existingEntity = await _context.PortfolioUsers.FindAsync(id);
+            if (existingEntity == null)
+            {
+                return NotFound();
+            }
+
+            // Update only the fields that can be modified
+            existingEntity.Name = portfolioUser.Name;
+            existingEntity.Bio = portfolioUser.Bio;
+            existingEntity.ProfileImageUrl = portfolioUser.ProfileImageUrl;
 
             try
             {
@@ -69,6 +148,7 @@ namespace SkillSnap.Backend.Controllers
 
         // POST: api/PortfolioUsers
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<ActionResult<PortfolioUser>> PostPortfolioUser(PortfolioUser portfolioUser)
         {
             _context.PortfolioUsers.Add(portfolioUser);
@@ -79,6 +159,7 @@ namespace SkillSnap.Backend.Controllers
 
         // DELETE: api/PortfolioUsers/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePortfolioUser(int id)
         {
             var portfolioUser = await _context.PortfolioUsers.FindAsync(id);
@@ -91,6 +172,59 @@ namespace SkillSnap.Backend.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // GET: api/PortfolioUsers/5/role
+        [HttpGet("{id}/role")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<string>> GetUserRole(int id)
+        {
+            var portfolioUser = await _context.PortfolioUsers.FindAsync(id);
+            if (portfolioUser == null || portfolioUser.ApplicationUserId == null)
+            {
+                return NotFound();
+            }
+
+            var applicationUser = await _userManager.FindByIdAsync(portfolioUser.ApplicationUserId);
+            if (applicationUser == null)
+            {
+                return NotFound();
+            }
+
+            var roles = await _userManager.GetRolesAsync(applicationUser);
+            return Ok(roles.FirstOrDefault() ?? "User");
+        }
+
+        // PUT: api/PortfolioUsers/5/role
+        [HttpPut("{id}/role")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateUserRole(int id, [FromBody] string newRole)
+        {
+            if (!new[] { "User", "Manager", "Admin" }.Contains(newRole))
+            {
+                return BadRequest("Invalid role. Must be User, Manager, or Admin.");
+            }
+
+            var portfolioUser = await _context.PortfolioUsers.FindAsync(id);
+            if (portfolioUser == null || portfolioUser.ApplicationUserId == null)
+            {
+                return NotFound();
+            }
+
+            var applicationUser = await _userManager.FindByIdAsync(portfolioUser.ApplicationUserId);
+            if (applicationUser == null)
+            {
+                return NotFound();
+            }
+
+            // Remove all existing roles
+            var currentRoles = await _userManager.GetRolesAsync(applicationUser);
+            await _userManager.RemoveFromRolesAsync(applicationUser, currentRoles);
+
+            // Add the new role
+            await _userManager.AddToRoleAsync(applicationUser, newRole);
+
+            return Ok();
         }
 
         private bool PortfolioUserExists(int id)

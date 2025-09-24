@@ -2,139 +2,281 @@
 @using Frontend.Shared
 @using SkillSnap.Shared.Models
 @using Frontend.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @inject PortfolioUserService PortfolioUserService
 @inject SkillService SkillService
+@inject IAuthService AuthService
 
-<h3>Manage Portfolio Users & Skills</h3>
+<h3>Manage Skills</h3>
 
-<!-- Add New User Form -->
-<div class="add-user-form">
-    <h4>Add New Portfolio User</h4>
-    <EditForm Model="@newUser" OnValidSubmit="@AddUser">
-        <div class="form-row">
-            <div class="form-group">
-                <label>Name:</label>
-                <InputText @bind-Value="newUser.Name" class="form-control" />
-            </div>
-            <div class="form-group">
-                <label>Bio:</label>
-                <InputTextArea @bind-Value="newUser.Bio" class="form-control" rows="2" />
-            </div>
-            <div class="form-group">
-                <label>Profile Image URL:</label>
-                <InputText @bind-Value="newUser.ProfileImageUrl" class="form-control" />
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary">Add User</button>
-            </div>
-        </div>
-    </EditForm>
-</div>
-
-@if (portfolioUsers == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <div class="users-container">
-        @foreach (var user in portfolioUsers)
+<AuthorizeView Context="authContext">
+    <Authorized>
+        @if (authContext.User.IsInRole("User"))
         {
-            <div class="user-skills-row">
-                <div class="user-profile">
-                    @if (editingUserId == user.Id)
-                    {
-                        <!-- Edit User Form -->
-                        <EditForm Model="@editingUser" OnValidSubmit="@(() => SaveUser(user.Id))">
-                            <div class="edit-form">
-                                <div class="form-group">
-                                    <label>Name:</label>
-                                    <InputText @bind-Value="editingUser.Name" class="form-control" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Bio:</label>
-                                    <InputTextArea @bind-Value="editingUser.Bio" class="form-control" rows="2" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Profile Image URL:</label>
-                                    <InputText @bind-Value="editingUser.ProfileImageUrl" class="form-control" />
-                                </div>
-                                <div class="form-buttons">
-                                    <button type="submit" class="btn btn-success btn-sm">Save</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
-                                </div>
-                            </div>
-                        </EditForm>
-                    }
-                    else
-                    {
-                        <ProfileCard User="@user" />
-                        <div class="user-actions">
-                            <button class="btn btn-warning btn-sm" @onclick="(() => StartEditUser(user))">Edit</button>
-                            <button class="btn btn-danger btn-sm" @onclick="(() => DeleteUser(user.Id))">Delete</button>
-                        </div>
-                    }
+            <!-- User Role: Only see their own portfolio -->
+            @if (myPortfolioUser == null)
+            {
+                <p><em>Loading your portfolio...</em></p>
+            }
+            else if (myPortfolioUser.Id == 0)
+            {
+                <div class="alert alert-warning">
+                    <p>You don't have a portfolio user profile yet. Please contact an administrator to set up your profile.</p>
                 </div>
-                
-                <div class="user-skills">
-                    <!-- Add New Skill Form -->
-                    <div class="add-skill-form">
-                        <h5>Add New Skill</h5>
-                        <EditForm Model="@newSkill" OnValidSubmit="@(() => AddSkill(user.Id))">
-                            <div class="skill-form-row">
-                                <InputText @bind-Value="newSkill.Name" placeholder="Skill name" class="form-control" />
-                                <InputText @bind-Value="newSkill.Level" placeholder="Level" class="form-control" />
-                                <button type="submit" class="btn btn-primary btn-sm">Add</button>
+            }
+            else
+            {
+                <div class="user-skills-row">
+                    <div class="user-profile">
+                        @if (editingUserId == myPortfolioUser.Id)
+                        {
+                            <!-- Edit User Form -->
+                            <EditForm Model="@editingUser" OnValidSubmit="@(() => SaveUser(myPortfolioUser.Id))" Context="editUserFormContext">
+                                <div class="edit-form">
+                                    <div class="form-group">
+                                        <label>Name:</label>
+                                        <InputText @bind-Value="editingUser.Name" class="form-control" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Bio:</label>
+                                        <InputTextArea @bind-Value="editingUser.Bio" class="form-control" rows="2" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Profile Image URL:</label>
+                                        <InputText @bind-Value="editingUser.ProfileImageUrl" class="form-control" />
+                                    </div>
+                                    <div class="form-buttons">
+                                        <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                                    </div>
+                                </div>
+                            </EditForm>
+                        }
+                        else
+                        {
+                            <ProfileCard User="@myPortfolioUser" />
+                            <div class="user-actions">
+                                <button class="btn btn-warning btn-sm" @onclick="(() => StartEditUser(myPortfolioUser))">Edit Profile</button>
                             </div>
-                        </EditForm>
+                        }
                     </div>
+                    
+                    <div class="user-skills">
+                        <!-- Add New Skill Form -->
+                        <div class="add-skill-form">
+                            <h5>Add New Skill</h5>
+                            <EditForm Model="@newSkill" OnValidSubmit="@(() => AddSkill(myPortfolioUser.Id))" Context="addSkillFormContext">
+                                <div class="skill-form-row">
+                                    <div class="skill-name-input">
+                                        <input type="text" @bind="newSkill.Name" @bind:event="oninput" 
+                                               placeholder="Skill name" class="form-control" 
+                                               list="skillNames" autocomplete="off" />
+                                        <datalist id="skillNames">
+                                            @foreach (var skillName in distinctSkillNames)
+                                            {
+                                                <option value="@skillName" />
+                                            }
+                                        </datalist>
+                                    </div>
+                                    <InputText @bind-Value="newSkill.Level" placeholder="Level" class="form-control" />
+                                    <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                                </div>
+                            </EditForm>
+                        </div>
 
-                    <!-- Display Skills -->
-                    @if (user.Skills != null && user.Skills.Any())
-                    {
-                        <h4>Skills</h4>
-                        <div class="skills-list">
-                            @foreach (var skill in user.Skills)
-                            {
-                                @if (editingSkillId == skill.Id)
+                        <!-- Display Skills -->
+                        @if (myPortfolioUser.Skills != null && myPortfolioUser.Skills.Any())
+                        {
+                            <h4>Your Skills</h4>
+                            <div class="skills-list">
+                                @foreach (var skill in myPortfolioUser.Skills)
                                 {
-                                    <!-- Edit Skill Form -->
-                                    <EditForm Model="@editingSkill" OnValidSubmit="@(() => SaveSkill(skill.Id))">
-                                        <div class="edit-skill-form">
-                                            <InputText @bind-Value="editingSkill.Name" class="form-control" />
-                                            <InputText @bind-Value="editingSkill.Level" class="form-control" />
-                                            <button type="submit" class="btn btn-success btn-sm">Save</button>
-                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelSkillEdit">Cancel</button>
+                                    @if (editingSkillId == skill.Id)
+                                    {
+                                        <!-- Edit Skill Form -->
+                                        <EditForm Model="@editingSkill" OnValidSubmit="@(() => SaveSkill(skill.Id))" Context="editSkillFormContext">
+                                            <div class="edit-skill-form">
+                                                <InputText @bind-Value="editingSkill.Name" class="form-control" />
+                                                <InputText @bind-Value="editingSkill.Level" class="form-control" />
+                                                <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelSkillEdit">Cancel</button>
+                                            </div>
+                                        </EditForm>
+                                    }
+                                    else
+                                    {
+                                        <div class="skill-item">
+                                            <span class="skill-tag-editable">@skill.Name - @skill.Level</span>
+                                            <div class="skill-actions">
+                                                <button class="btn btn-warning btn-xs" @onclick="(() => StartEditSkill(skill))">Edit</button>
+                                                <button class="btn btn-danger btn-xs" @onclick="(() => DeleteSkill(skill.Id))">Delete</button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p><em>No skills listed yet. Add your first skill above!</em></p>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <!-- Manager/Admin Role: See all portfolios -->
+            <!-- Add New User Form -->
+            <AuthorizeView Roles="Admin" Context="adminContext">
+                <div class="add-user-form">
+                    <h4>Add New Portfolio User</h4>
+                    <EditForm Model="@newUser" OnValidSubmit="@AddUser" Context="addUserFormContext">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Name:</label>
+                                <InputText @bind-Value="newUser.Name" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>Bio:</label>
+                                <InputTextArea @bind-Value="newUser.Bio" class="form-control" rows="2" />
+                            </div>
+                            <div class="form-group">
+                                <label>Profile Image URL:</label>
+                                <InputText @bind-Value="newUser.ProfileImageUrl" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">Add User</button>
+                            </div>
+                        </div>
+                    </EditForm>
+                </div>
+            </AuthorizeView>
+
+            @if (portfolioUsers == null)
+            {
+                <p><em>Loading...</em></p>
+            }
+            else
+            {
+                <div class="users-container">
+                    @foreach (var user in portfolioUsers)
+                    {
+                        <div class="user-skills-row">
+                            <div class="user-profile">
+                                @if (editingUserId == user.Id)
+                                {
+                                    <!-- Edit User Form -->
+                                    <EditForm Model="@editingUser" OnValidSubmit="@(() => SaveUser(user.Id))" Context="editUserAllFormContext">
+                                        <div class="edit-form">
+                                            <div class="form-group">
+                                                <label>Name:</label>
+                                                <InputText @bind-Value="editingUser.Name" class="form-control" />
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Bio:</label>
+                                                <InputTextArea @bind-Value="editingUser.Bio" class="form-control" rows="2" />
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Profile Image URL:</label>
+                                                <InputText @bind-Value="editingUser.ProfileImageUrl" class="form-control" />
+                                            </div>
+                                            <div class="form-buttons">
+                                                <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                                            </div>
                                         </div>
                                     </EditForm>
                                 }
                                 else
                                 {
-                                    <div class="skill-item">
-                                        <span class="skill-tag-editable">@skill.Name - @skill.Level</span>
-                                        <div class="skill-actions">
-                                            <button class="btn btn-warning btn-xs" @onclick="(() => StartEditSkill(skill))">Edit</button>
-                                            <button class="btn btn-danger btn-xs" @onclick="(() => DeleteSkill(skill.Id))">Delete</button>
-                                        </div>
+                                    <ProfileCard User="@user" />
+                                    <div class="user-actions">
+                                        <button class="btn btn-warning btn-sm" @onclick="(() => StartEditUser(user))">Edit</button>
+                                        <AuthorizeView Roles="Admin" Context="deleteContext">
+                                            <button class="btn btn-danger btn-sm" @onclick="(() => DeleteUser(user.Id))">Delete</button>
+                                        </AuthorizeView>
                                     </div>
                                 }
-                            }
+                            </div>
+                            
+                            <div class="user-skills">
+                                <!-- Add New Skill Form -->
+                                <div class="add-skill-form">
+                                    <h5>Add New Skill</h5>
+                                    <EditForm Model="@newSkill" OnValidSubmit="@(() => AddSkill(user.Id))" Context="addAllSkillFormContext">
+                                        <div class="skill-form-row">
+                                            <div class="skill-name-input">
+                                                <input type="text" @bind="newSkill.Name" @bind:event="oninput" 
+                                                       placeholder="Skill name" class="form-control" 
+                                                       list="skillNamesAdmin" autocomplete="off" />
+                                                <datalist id="skillNamesAdmin">
+                                                    @foreach (var skillName in distinctSkillNames)
+                                                    {
+                                                        <option value="@skillName" />
+                                                    }
+                                                </datalist>
+                                            </div>
+                                            <InputText @bind-Value="newSkill.Level" placeholder="Level" class="form-control" />
+                                            <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                                        </div>
+                                    </EditForm>
+                                </div>
+
+                                <!-- Display Skills -->
+                                @if (user.Skills != null && user.Skills.Any())
+                                {
+                                    <h4>Skills</h4>
+                                    <div class="skills-list">
+                                        @foreach (var skill in user.Skills)
+                                        {
+                                            @if (editingSkillId == skill.Id)
+                                            {
+                                                <!-- Edit Skill Form -->
+                                                <EditForm Model="@editingSkill" OnValidSubmit="@(() => SaveSkill(skill.Id))" Context="editAllSkillFormContext">
+                                                    <div class="edit-skill-form">
+                                                        <InputText @bind-Value="editingSkill.Name" class="form-control" />
+                                                        <InputText @bind-Value="editingSkill.Level" class="form-control" />
+                                                        <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelSkillEdit">Cancel</button>
+                                                    </div>
+                                                </EditForm>
+                                            }
+                                            else
+                                            {
+                                                <div class="skill-item">
+                                                    <span class="skill-tag-editable">@skill.Name - @skill.Level</span>
+                                                    <div class="skill-actions">
+                                                        <button class="btn btn-warning btn-xs" @onclick="(() => StartEditSkill(skill))">Edit</button>
+                                                        <button class="btn btn-danger btn-xs" @onclick="(() => DeleteSkill(skill.Id))">Delete</button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p><em>No skills listed.</em></p>
+                                }
+                            </div>
                         </div>
                     }
-                    else
-                    {
-                        <p><em>No skills listed.</em></p>
-                    }
                 </div>
-            </div>
+            }
         }
-    </div>
-}
+    </Authorized>
+    <NotAuthorized>
+        <p>Please log in to manage skills.</p>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
     private List<PortfolioUser>? portfolioUsers;
+    private PortfolioUser? myPortfolioUser;
     private PortfolioUser newUser = new();
     private Skill newSkill = new();
+    private List<string> distinctSkillNames = new();
     
     // Edit state
     private int? editingUserId = null;
@@ -142,14 +284,48 @@ else
     private int? editingSkillId = null;
     private Skill editingSkill = new();
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadPortfolioUsers();
+        await LoadDistinctSkillNames();
+        
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                if (authState.User.IsInRole("User"))
+                {
+                    await LoadMyPortfolioUser();
+                }
+                else
+                {
+                    await LoadPortfolioUsers();
+                }
+            }
+        }
+    }
+
+    private async Task LoadDistinctSkillNames()
+    {
+        distinctSkillNames = await SkillService.GetDistinctSkillNamesAsync();
     }
 
     private async Task LoadPortfolioUsers()
     {
         portfolioUsers = await PortfolioUserService.GetAllPortfolioUsersAsync();
+    }
+
+    private async Task LoadMyPortfolioUser()
+    {
+        myPortfolioUser = await PortfolioUserService.GetMyPortfolioUserAsync();
+        // If no portfolio user found, create an empty one for display
+        if (myPortfolioUser == null)
+        {
+            myPortfolioUser = new PortfolioUser { Id = 0, Name = "", Bio = "", ProfileImageUrl = "" };
+        }
     }
 
     private async Task AddUser()
@@ -179,7 +355,20 @@ else
         await PortfolioUserService.UpdatePortfolioUserAsync(userId, editingUser);
         editingUserId = null;
         editingUser = new();
-        await LoadPortfolioUsers();
+        
+        // Refresh the appropriate data based on user role
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.IsInRole("User"))
+            {
+                await LoadMyPortfolioUser();
+            }
+            else
+            {
+                await LoadPortfolioUsers();
+            }
+        }
     }
 
     private void CancelEdit()
@@ -201,7 +390,23 @@ else
             newSkill.PortfolioUserId = userId;
             await SkillService.CreateSkillAsync(newSkill);
             newSkill = new();
-            await LoadPortfolioUsers();
+            
+            // Refresh distinct skill names for autocomplete
+            await LoadDistinctSkillNames();
+            
+            // Refresh the appropriate data based on user role
+            if (AuthenticationStateTask != null)
+            {
+                var authState = await AuthenticationStateTask;
+                if (authState.User.IsInRole("User"))
+                {
+                    await LoadMyPortfolioUser();
+                }
+                else
+                {
+                    await LoadPortfolioUsers();
+                }
+            }
         }
     }
 
@@ -222,7 +427,20 @@ else
         await SkillService.UpdateSkillAsync(skillId, editingSkill);
         editingSkillId = null;
         editingSkill = new();
-        await LoadPortfolioUsers();
+        
+        // Refresh the appropriate data based on user role
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.IsInRole("User"))
+            {
+                await LoadMyPortfolioUser();
+            }
+            else
+            {
+                await LoadPortfolioUsers();
+            }
+        }
     }
 
     private void CancelSkillEdit()
@@ -234,6 +452,19 @@ else
     private async Task DeleteSkill(int skillId)
     {
         await SkillService.DeleteSkillAsync(skillId);
-        await LoadPortfolioUsers();
+        
+        // Refresh the appropriate data based on user role
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.IsInRole("User"))
+            {
+                await LoadMyPortfolioUser();
+            }
+            else
+            {
+                await LoadPortfolioUsers();
+            }
+        }
     }
 }

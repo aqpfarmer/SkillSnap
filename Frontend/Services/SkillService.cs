@@ -5,12 +5,12 @@ namespace Frontend.Services
 {
     public class SkillService
     {
-        private readonly HttpClient _httpClient;
+        private readonly AuthenticatedHttpClientService _httpClientService;
         private readonly JsonSerializerOptions _jsonOptions;
 
-        public SkillService(HttpClient httpClient)
+        public SkillService(AuthenticatedHttpClientService httpClientService)
         {
-            _httpClient = httpClient;
+            _httpClientService = httpClientService;
             _jsonOptions = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -19,7 +19,7 @@ namespace Frontend.Services
 
         public async Task<List<Skill>> GetAllSkillsAsync()
         {
-            var response = await _httpClient.GetAsync("api/skills");
+            var response = await _httpClientService.GetAsync("api/skills");
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
@@ -28,7 +28,7 @@ namespace Frontend.Services
 
         public async Task<Skill?> GetSkillByIdAsync(int id)
         {
-            var response = await _httpClient.GetAsync($"api/skills/{id}");
+            var response = await _httpClientService.GetAsync($"api/skills/{id}");
             
             if (response.IsSuccessStatusCode)
             {
@@ -44,7 +44,7 @@ namespace Frontend.Services
             var json = JsonSerializer.Serialize(skill, _jsonOptions);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync("api/skills", content);
+            var response = await _httpClientService.PostAsync("api/skills", content);
             response.EnsureSuccessStatusCode();
 
             var responseJson = await response.Content.ReadAsStringAsync();
@@ -56,14 +56,30 @@ namespace Frontend.Services
             var json = JsonSerializer.Serialize(skill, _jsonOptions);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PutAsync($"api/skills/{id}", content);
+            var response = await _httpClientService.PutAsync($"api/skills/{id}", content);
             return response.IsSuccessStatusCode;
         }
 
         public async Task<bool> DeleteSkillAsync(int id)
         {
-            var response = await _httpClient.DeleteAsync($"api/skills/{id}");
+            var response = await _httpClientService.DeleteAsync($"api/skills/{id}");
             return response.IsSuccessStatusCode;
+        }
+
+        public async Task<List<string>> GetDistinctSkillNamesAsync()
+        {
+            try
+            {
+                var response = await _httpClientService.GetAsync("api/skills/names/distinct");
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<List<string>>(json, _jsonOptions) ?? new List<string>();
+            }
+            catch
+            {
+                return new List<string>();
+            }
         }
     }
 }

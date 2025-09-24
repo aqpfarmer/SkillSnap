@@ -3,7 +3,10 @@
 <div class="profile-card">
     @if (User != null)
     {
-        <img src="@User.ProfileImageUrl" alt="Profile Picture" class="profile-picture" />
+        <img src="@GetProfileImageUrl()" 
+             alt="Profile Picture" 
+             class="profile-picture" 
+             onerror="this.src='https://via.placeholder.com/150?text=User'" />
         <div class="profile-info">
             <h3>@User.Name</h3>
             <p>@User.Bio</p>
@@ -24,4 +27,44 @@
 @code {
     [Parameter]
     public PortfolioUser? User { get; set; }
+
+    private string GetProfileImageUrl()
+    {
+        if (User?.ProfileImageUrl == null || string.IsNullOrWhiteSpace(User.ProfileImageUrl))
+        {
+            return "https://via.placeholder.com/150?text=User";
+        }
+        
+        var imageUrl = User.ProfileImageUrl;
+        
+        // Try to extract direct image URL from Google search results
+        if (imageUrl.Contains("google.com/imgres") && imageUrl.Contains("imgurl="))
+        {
+            try
+            {
+                var imgUrlStart = imageUrl.IndexOf("imgurl=") + 7;
+                var imgUrlEnd = imageUrl.IndexOf("&", imgUrlStart);
+                if (imgUrlEnd == -1) imgUrlEnd = imageUrl.Length;
+                
+                var directUrl = imageUrl.Substring(imgUrlStart, imgUrlEnd - imgUrlStart);
+                directUrl = Uri.UnescapeDataString(directUrl);
+                
+                imageUrl = directUrl;
+            }
+            catch (Exception)
+            {
+                // If extraction fails, continue with original URL
+            }
+        }
+        
+        // Ensure URL has protocol
+        if (!imageUrl.StartsWith("http://") && !imageUrl.StartsWith("https://"))
+        {
+            imageUrl = "https://" + imageUrl;
+        }
+        
+        // Add cache-busting parameter to force image refresh
+        var separator = imageUrl.Contains('?') ? "&" : "?";
+        return $"{imageUrl}{separator}t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+    }
 }

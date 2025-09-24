@@ -2,153 +2,203 @@
 @using SkillSnap.Shared.Models
 @using Frontend.Services
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
 @inject PortfolioUserService PortfolioUserService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Portfolio Users</PageTitle>
 
-<h2>Portfolio Users</h2>
+<AuthorizeView Roles="Admin,Manager" Context="authContext">
+    <Authorized>
+        <h2>Portfolio Users</h2>
 
-<!-- Add User Form -->
-<div class="add-user-form">
-    <h4>Add New Portfolio User</h4>
-    <EditForm Model="newUser" OnValidSubmit="AddUser">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
-        
-        <div class="form-row">
-            <div class="form-group">
-                <label for="name">Name:</label>
-                <InputText id="name" @bind-Value="newUser.Name" class="form-control" />
-            </div>
-            <div class="form-group">
-                <label for="bio">Bio:</label>
-                <InputTextArea id="bio" @bind-Value="newUser.Bio" class="form-control" rows="3" />
-            </div>
-            <div class="form-group">
-                <label for="profileImage">Profile Image URL:</label>
-                <InputText id="profileImage" @bind-Value="newUser.ProfileImageUrl" class="form-control" />
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary" disabled="@isLoading">
-                    @if (isLoading)
-                    {
-                        <span>Adding...</span>
-                    }
-                    else
-                    {
-                        <span>Add User</span>
-                    }
-                </button>
-            </div>
-        </div>
-    </EditForm>
-</div>
-
-<!-- Users List -->
-@if (users == null)
-{
-    <p><em>Loading users...</em></p>
-}
-else if (!users.Any())
-{
-    <p><em>No portfolio users found.</em></p>
-}
-else
-{
-    <div class="users-container">
-        @foreach (var user in users)
-        {
-            <div class="user-row">
-                @if (editingUserId == user.Id)
-                {
-                    <!-- Edit Form -->
-                    <div class="user-edit-form">
-                        <EditForm Model="editUser" OnValidSubmit="() => SaveUser(user.Id)">
-                            <DataAnnotationsValidator />
-                            <ValidationSummary />
-                            
-                            <div class="edit-form">
-                                <div class="form-group">
-                                    <label>Name:</label>
-                                    <InputText @bind-Value="editUser.Name" class="form-control" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Bio:</label>
-                                    <InputTextArea @bind-Value="editUser.Bio" class="form-control" rows="3" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Profile Image URL:</label>
-                                    <InputText @bind-Value="editUser.ProfileImageUrl" class="form-control" />
-                                </div>
-                                
-                                <div class="form-buttons">
-                                    <button type="submit" class="btn btn-success btn-sm" disabled="@isLoading">Save</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
-                                </div>
-                            </div>
-                        </EditForm>
-                    </div>
-                }
-                else
-                {
-                    <!-- Display Mode -->
-                    <div class="user-display">
-                        <div class="user-profile">
-                            <img src="@user.ProfileImageUrl" alt="Profile Picture" class="profile-picture" />
-                            <div class="user-info">
-                                <h4>@user.Name</h4>
-                                <p>@user.Bio</p>
-                                
-                                <!-- Skills Display -->
-                                @if (user.Skills != null && user.Skills.Any())
-                                {
-                                    <div class="user-skills">
-                                        <strong>Skills:</strong>
-                                        <div class="skills-tags">
-                                            @foreach (var skill in user.Skills)
-                                            {
-                                                <span class="skill-tag">@skill.Name (@skill.Level)</span>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                                
-                                <!-- Projects Display -->
-                                @if (user.Projects != null && user.Projects.Any())
-                                {
-                                    <div class="user-projects">
-                                        <strong>Projects:</strong>
-                                        <ul>
-                                            @foreach (var project in user.Projects)
-                                            {
-                                                <li>
-                                                    @if (!string.IsNullOrEmpty(project.ProjectUrl))
-                                                    {
-                                                        <a href="@project.ProjectUrl" target="_blank" class="project-link">@project.Title</a>
-                                                    }
-                                                    else
-                                                    {
-                                                        @project.Title
-                                                    }
-                                                </li>
-                                            }
-                                        </ul>
-                                    </div>
-                                }
-                            </div>
-                        </div>
+        <!-- Add User Form - Admin Only -->
+        <AuthorizeView Roles="Admin" Context="adminContext">
+            <Authorized>
+                <div class="add-user-form">
+                    <h4>Add New Portfolio User</h4>
+                    <EditForm Model="newUser" OnValidSubmit="AddUser" Context="addUserFormContext">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
                         
-                        <div class="user-actions">
-                            <button class="btn btn-warning btn-sm" @onclick="() => StartEdit(user)">Edit</button>
-                            <button class="btn btn-danger btn-sm" @onclick="() => DeleteUser(user.Id)">Delete</button>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="name">Name:</label>
+                                <InputText id="name" @bind-Value="newUser.Name" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label for="bio">Bio:</label>
+                                <InputTextArea id="bio" @bind-Value="newUser.Bio" class="form-control" rows="3" />
+                            </div>
+                            <div class="form-group">
+                                <label for="profileImage">Profile Image URL:</label>
+                                <InputText id="profileImage" @bind-Value="newUser.ProfileImageUrl" 
+                                          class="form-control" 
+                                          placeholder="https://example.com/image.jpg or https://avatars.githubusercontent.com/u/123" />
+                                <small class="form-text text-muted">
+                                    Use direct image URLs ending in .jpg, .png, .gif, or services like GitHub avatars. 
+                                    <br/>Avoid Google image search URLs or Wikipedia file pages.
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                                    @if (isLoading)
+                                    {
+                                        <span>Adding...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Add User</span>
+                                    }
+                                </button>
+                            </div>
                         </div>
+                    </EditForm>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <!-- Users List -->
+        @if (users == null)
+        {
+            <p><em>Loading users...</em></p>
+        }
+        else if (!users.Any())
+        {
+            <p><em>No portfolio users found.</em></p>
+        }
+        else
+        {
+            <div class="users-container">
+                @foreach (var user in users)
+                {
+                    <div class="user-row">
+                        @if (editingUserId == user.Id)
+                        {
+                            <!-- Edit Form - Admin Only -->
+                            <AuthorizeView Roles="Admin" Context="editAdminContext">
+                                <Authorized>
+                                    <div class="user-edit-form">
+                                        <EditForm Model="editUser" OnValidSubmit="() => SaveUser(user.Id)" Context="editUserFormContext">
+                                            <DataAnnotationsValidator />
+                                            <ValidationSummary />
+                                            
+                                            <div class="edit-form">
+                                                <div class="form-group">
+                                                    <label>Name:</label>
+                                                    <InputText @bind-Value="editUser.Name" class="form-control" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Bio:</label>
+                                                    <InputTextArea @bind-Value="editUser.Bio" class="form-control" rows="3" />
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Profile Image URL:</label>
+                                                    <InputText @bind-Value="editUser.ProfileImageUrl" 
+                                                              class="form-control" 
+                                                              placeholder="https://example.com/image.jpg or https://avatars.githubusercontent.com/u/123" />
+                                                    <small class="form-text text-muted">
+                                                        Use direct image URLs ending in .jpg, .png, .gif, or services like GitHub avatars.
+                                                        <br/>Avoid Google image search URLs or Wikipedia file pages.
+                                                    </small>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Role:</label>
+                                                    <InputSelect @bind-Value="editUserRole" class="form-control">
+                                                        <option value="User">User</option>
+                                                        <option value="Manager">Manager</option>
+                                                        <option value="Admin">Admin</option>
+                                                    </InputSelect>
+                                                    <small class="form-text text-muted">
+                                                        User: Can manage own portfolio. Manager: Can view all portfolios. Admin: Full system access.
+                                                    </small>
+                                                </div>
+                                                
+                                                <div class="form-buttons">
+                                                    <button type="submit" class="btn btn-success btn-sm" disabled="@isLoading">Save</button>
+                                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                                                </div>
+                                            </div>
+                                        </EditForm>
+                                    </div>
+                                </Authorized>
+                            </AuthorizeView>
+                        }
+                        else
+                        {
+                            <!-- Display Mode -->
+                            <div class="user-display">
+                                <div class="user-profile">
+                                    <img src="@GetProfileImageUrl(user)" 
+                                         alt="Profile Picture" 
+                                         class="profile-picture" 
+                                         onerror="this.src='https://via.placeholder.com/150?text=User'" />
+                                    <div class="user-info">
+                                        <h4>@user.Name</h4>
+                                        <p>@user.Bio</p>
+                                        
+                                        <!-- Skills Display -->
+                                        @if (user.Skills != null && user.Skills.Any())
+                                        {
+                                            <div class="user-skills">
+                                                <strong>Skills:</strong>
+                                                <div class="skills-tags">
+                                                    @foreach (var skill in user.Skills)
+                                                    {
+                                                        <span class="skill-tag">@skill.Name (@skill.Level)</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                        
+                                        <!-- Projects Display -->
+                                        @if (user.Projects != null && user.Projects.Any())
+                                        {
+                                            <div class="user-projects">
+                                                <strong>Projects:</strong>
+                                                <ul>
+                                                    @foreach (var project in user.Projects)
+                                                    {
+                                                        <li>
+                                                            @if (!string.IsNullOrEmpty(project.ProjectUrl))
+                                                            {
+                                                                <a href="@project.ProjectUrl" target="_blank" class="project-link">@project.Title</a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @project.Title
+                                                            }
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <!-- User Actions - Admin Only -->
+                                <AuthorizeView Roles="Admin" Context="actionAdminContext">
+                                    <Authorized>
+                                        <div class="user-actions">
+                                            <button class="btn btn-warning btn-sm" @onclick="async () => await StartEdit(user)">Edit</button>
+                                            <button class="btn btn-danger btn-sm" @onclick="() => DeleteUser(user.Id)">Delete</button>
+                                        </div>
+                                    </Authorized>
+                                </AuthorizeView>
+                            </div>
+                        }
                     </div>
                 }
             </div>
         }
-    </div>
-}
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">
+            <h4>Access Denied</h4>
+            <p>You need to be an Administrator or Manager to access this page.</p>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
     private List<PortfolioUser>? users;
@@ -156,6 +206,7 @@ else
     private PortfolioUser editUser = new();
     private int? editingUserId;
     private bool isLoading = false;
+    private string editUserRole = "User";
 
     protected override async Task OnInitializedAsync()
     {
@@ -198,7 +249,7 @@ else
         }
     }
 
-    private void StartEdit(PortfolioUser user)
+    private async Task StartEdit(PortfolioUser user)
     {
         editingUserId = user.Id;
         editUser = new PortfolioUser
@@ -208,6 +259,17 @@ else
             Bio = user.Bio,
             ProfileImageUrl = user.ProfileImageUrl
         };
+        
+        // Load the user's current role
+        try
+        {
+            editUserRole = await PortfolioUserService.GetUserRoleAsync(user.Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user role: {ex.Message}");
+            editUserRole = "User"; // Default fallback
+        }
     }
 
     private async Task SaveUser(int id)
@@ -221,13 +283,11 @@ else
             var success = await PortfolioUserService.UpdatePortfolioUserAsync(id, editUser);
             if (success)
             {
-                var userIndex = users?.FindIndex(u => u.Id == id) ?? -1;
-                if (userIndex >= 0 && users != null)
-                {
-                    users[userIndex].Name = editUser.Name;
-                    users[userIndex].Bio = editUser.Bio;
-                    users[userIndex].ProfileImageUrl = editUser.ProfileImageUrl;
-                }
+                // Update the user's role
+                await PortfolioUserService.UpdateUserRoleAsync(id, editUserRole);
+                
+                // Instead of updating local array, reload from server to ensure fresh data
+                await LoadUsers();
                 CancelEdit();
             }
         }
@@ -245,6 +305,7 @@ else
     {
         editingUserId = null;
         editUser = new PortfolioUser();
+        editUserRole = "User"; // Reset role to default
     }
 
     private async Task DeleteUser(int id)
@@ -265,5 +326,45 @@ else
                 Console.WriteLine($"Error deleting user: {ex.Message}");
             }
         }
+    }
+
+    private string GetProfileImageUrl(PortfolioUser user)
+    {
+        if (user?.ProfileImageUrl == null || string.IsNullOrWhiteSpace(user.ProfileImageUrl))
+        {
+            return "https://via.placeholder.com/150?text=User";
+        }
+        
+        var imageUrl = user.ProfileImageUrl;
+        
+        // Try to extract direct image URL from Google search results
+        if (imageUrl.Contains("google.com/imgres") && imageUrl.Contains("imgurl="))
+        {
+            try
+            {
+                var imgUrlStart = imageUrl.IndexOf("imgurl=") + 7;
+                var imgUrlEnd = imageUrl.IndexOf("&", imgUrlStart);
+                if (imgUrlEnd == -1) imgUrlEnd = imageUrl.Length;
+                
+                var directUrl = imageUrl.Substring(imgUrlStart, imgUrlEnd - imgUrlStart);
+                directUrl = Uri.UnescapeDataString(directUrl);
+                
+                imageUrl = directUrl;
+            }
+            catch (Exception)
+            {
+                // If extraction fails, continue with original URL
+            }
+        }
+        
+        // Ensure URL has protocol
+        if (!imageUrl.StartsWith("http://") && !imageUrl.StartsWith("https://"))
+        {
+            imageUrl = "https://" + imageUrl;
+        }
+        
+        // Add cache-busting parameter to force image refresh
+        var separator = imageUrl.Contains('?') ? "&" : "?";
+        return $"{imageUrl}{separator}t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
     }
 }

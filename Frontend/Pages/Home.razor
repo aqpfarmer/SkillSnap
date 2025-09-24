@@ -1,7 +1,12 @@
 ﻿@page "/"
 @using SkillSnap.Shared.Models
 @using Frontend.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @inject PortfolioUserService PortfolioUserService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@attribute [AllowAnonymous]
 
 <PageTitle>SkillSnap - Developer Portfolio Platform</PageTitle>
 
@@ -126,6 +131,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Redirect authenticated users to their profile page
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/profile");
+            return;
+        }
+
         await LoadStats();
     }
 

@@ -218,3 +218,29 @@
         min-width: auto;
     }
 }
+
+/* Skill Name Input with Autocomplete */
+.skill-name-input {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+}
+
+.skill-name-input input[type="text"] {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.skill-name-input input[type="text"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Datalist styling is limited but we can style the input */
+.skill-name-input input[type="text"]::-webkit-calendar-picker-indicator {
+    display: none;
+}

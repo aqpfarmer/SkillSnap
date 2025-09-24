@@ -1,0 +1,174 @@
+@page "/home"
+@using SkillSnap.Shared.Models
+@using Frontend.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject PortfolioUserService PortfolioUserService
+@attribute [AllowAnonymous]
+
+<PageTitle>SkillSnap - Developer Portfolio Platform</PageTitle>
+
+<div class="hero-section">
+    <div class="hero-content">
+        <h1>Welcome to SkillSnap</h1>
+        <h2>Your Complete Developer Portfolio Platform</h2>
+        <p class="lead">
+            Showcase your skills, highlight your projects, and manage your professional profile 
+            with SkillSnap - the modern solution for developer portfolios.
+        </p>
+        
+        <AuthorizeView>
+            <Authorized>
+                <div class="alert alert-info mt-3">
+                    <p><strong>Welcome back!</strong> You're viewing the public home page. 
+                    <a href="/profile" class="alert-link">Go to your Profile</a> to see your personal dashboard.</p>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="cta-buttons">
+                    <a href="/register" class="btn btn-primary btn-lg">Get Started</a>
+                    <a href="/login" class="btn btn-outline-light btn-lg">Sign In</a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+<div class="features-section">
+    <div class="container">
+        <h3>What is SkillSnap?</h3>
+        <p>
+            SkillSnap is a full-stack web application designed to help developers create and manage 
+            their professional portfolios. Built with modern technologies, it demonstrates 
+            comprehensive understanding of backend development, frontend frameworks, database management, 
+            and security principles.
+        </p>
+
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="bi bi-star-fill"></i>
+                    </div>
+                    <h4>Skills Management</h4>
+                    <p>Organize and showcase your technical skills with proficiency levels and categories.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="bi bi-folder-fill"></i>
+                    </div>
+                    <h4>Project Showcase</h4>
+                    <p>Display your best work with detailed descriptions, links, and technologies used.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="bi bi-people-fill"></i>
+                    </div>
+                    <h4>Portfolio Management</h4>
+                    <p>Create comprehensive developer profiles with contact information and professional bios.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (totalStats != null)
+{
+    <div class="stats-section">
+        <div class="container">
+            <h3>Platform Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">@totalStats.Users</div>
+                    <div class="stat-label">Developers</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">@totalStats.Skills</div>
+                    <div class="stat-label">Skills</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">@totalStats.Projects</div>
+                    <div class="stat-label">Projects</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="tech-stack-section">
+    <div class="container">
+        <h3>Built With Modern Technology</h3>
+        <div class="tech-grid">
+            <div class="tech-item">
+                <h5>Backend</h5>
+                <ul>
+                    <li>ASP.NET Core 9</li>
+                    <li>Entity Framework Core</li>
+                    <li>SQLite Database</li>
+                    <li>JWT Authentication</li>
+                    <li>RESTful APIs</li>
+                </ul>
+            </div>
+            <div class="tech-item">
+                <h5>Frontend</h5>
+                <ul>
+                    <li>Blazor WebAssembly</li>
+                    <li>Component-based Architecture</li>
+                    <li>Bootstrap 5</li>
+                    <li>Responsive Design</li>
+                    <li>Modern CSS</li>
+                </ul>
+            </div>
+            <div class="tech-item">
+                <h5>Features</h5>
+                <ul>
+                    <li>Role-based Authorization</li>
+                    <li>CRUD Operations</li>
+                    <li>Form Validation</li>
+                    <li>Secure Authentication</li>
+                    <li>Professional UI/UX</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private PlatformStats? totalStats;
+
+    public class PlatformStats
+    {
+        public int Users { get; set; }
+        public int Skills { get; set; }
+        public int Projects { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStats();
+    }
+
+    private async Task LoadStats()
+    {
+        try
+        {
+            var users = await PortfolioUserService.GetAllPortfolioUsersAsync();
+            
+            totalStats = new PlatformStats
+            {
+                Users = users.Count,
+                Skills = users.SelectMany(u => u.Skills ?? new List<Skill>()).Count(),
+                Projects = users.SelectMany(u => u.Projects ?? new List<Project>()).Count()
+            };
+        }
+        catch
+        {
+            // Handle error gracefully
+            totalStats = new PlatformStats { Users = 0, Skills = 0, Projects = 0 };
+        }
+    }
+}

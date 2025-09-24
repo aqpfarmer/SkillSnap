@@ -2,146 +2,304 @@
 @using SkillSnap.Shared.Models
 @using Frontend.Services
 @using Frontend.Shared
+@using Microsoft.AspNetCore.Components.Authorization
 @inject ProjectService ProjectService
 @inject PortfolioUserService PortfolioUserService
+@inject IAuthService AuthService
 
 <h3>Manage Projects</h3>
 
-<!-- Add New Project Form -->
-<div class="add-project-form">
-    <h4>Add New Project</h4>
-    <EditForm Model="@newProject" OnValidSubmit="@AddProject">
-        <div class="form-row">
-            <div class="form-group">
-                <label>Title:</label>
-                <InputText @bind-Value="newProject.Title" class="form-control" placeholder="Project title" />
-            </div>
-            <div class="form-group">
-                <label>Description:</label>
-                <InputTextArea @bind-Value="newProject.Description" class="form-control" rows="2" placeholder="Project description" />
-            </div>
-            <div class="form-group">
-                <label>Project URL:</label>
-                <InputText @bind-Value="newProject.ProjectUrl" class="form-control" placeholder="https://github.com/user/project" />
-            </div>
-            <div class="form-group">
-                <label>Portfolio User:</label>
-                <InputSelect @bind-Value="newProject.PortfolioUserId" class="form-control">
-                    <option value="0">Select a user...</option>
-                    @if (portfolioUsers != null)
-                    {
-                        @foreach (var user in portfolioUsers)
-                        {
-                            <option value="@user.Id">@user.Name</option>
-                        }
-                    }
-                </InputSelect>
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary" disabled="@(newProject.PortfolioUserId == 0)">Add Project</button>
-            </div>
-        </div>
-    </EditForm>
-</div>
-
-@if (projects == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <div class="projects-container">
-        @foreach (var project in projects)
+<AuthorizeView Context="authContext">
+    <Authorized>
+        @if (authContext.User.IsInRole("User"))
         {
-            <div class="project-row">
-                @if (editingProjectId == project.Id)
-                {
-                    <!-- Edit Project Form -->
-                    <div class="project-edit-form">
-                        <EditForm Model="@editingProject" OnValidSubmit="@(() => SaveProject(project.Id))">
-                            <div class="edit-form">
-                                <div class="form-group">
-                                    <label>Title:</label>
-                                    <InputText @bind-Value="editingProject.Title" class="form-control" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Description:</label>
-                                    <InputTextArea @bind-Value="editingProject.Description" class="form-control" rows="3" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Project URL:</label>
-                                    <InputText @bind-Value="editingProject.ProjectUrl" class="form-control" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Portfolio User:</label>
-                                    <InputSelect @bind-Value="editingProject.PortfolioUserId" class="form-control">
-                                        @if (portfolioUsers != null)
-                                        {
-                                            @foreach (var user in portfolioUsers)
-                                            {
-                                                <option value="@user.Id">@user.Name</option>
-                                            }
-                                        }
-                                    </InputSelect>
-                                </div>
-                                <div class="form-buttons">
-                                    <button type="submit" class="btn btn-success btn-sm">Save</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
-                                </div>
+            <!-- User Role: Only see their own projects -->
+            @if (myPortfolioUser == null)
+            {
+                <p><em>Loading your portfolio...</em></p>
+            }
+            else if (myPortfolioUser.Id == 0)
+            {
+                <div class="alert alert-warning">
+                    <p>You don't have a portfolio user profile yet. Please contact an administrator to set up your profile.</p>
+                </div>
+            }
+            else
+            {
+                <!-- Add New Project Form for User -->
+                <div class="add-project-form">
+                    <h4>Add New Project</h4>
+                    <EditForm Model="@newProject" OnValidSubmit="@(() => AddProject(myPortfolioUser.Id))" Context="addProjectFormContext">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Title:</label>
+                                <InputText @bind-Value="newProject.Title" class="form-control" placeholder="Project title" />
                             </div>
-                        </EditForm>
-                    </div>
+                            <div class="form-group">
+                                <label>Description:</label>
+                                <InputTextArea @bind-Value="newProject.Description" class="form-control" rows="2" placeholder="Project description" />
+                            </div>
+                            <div class="form-group">
+                                <label>Project URL:</label>
+                                <InputText @bind-Value="newProject.ProjectUrl" class="form-control" placeholder="https://github.com/user/project" />
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">Add Project</button>
+                            </div>
+                        </div>
+                    </EditForm>
+                </div>
+
+                @if (myProjects == null)
+                {
+                    <p><em>Loading your projects...</em></p>
                 }
                 else
                 {
-                    <div class="project-details">
-                        <div class="project-header">
-                            <h4>@project.Title</h4>
-                            <div class="project-actions">
-                                <button class="btn btn-warning btn-sm" @onclick="(() => StartEditProject(project))">Edit</button>
-                                <button class="btn btn-danger btn-sm" @onclick="(() => DeleteProject(project.Id))">Delete</button>
-                            </div>
-                        </div>
-                        <p>@project.Description</p>
-                        @if (!string.IsNullOrEmpty(project.ProjectUrl))
+                    <div class="projects-container">
+                        @if (myProjects.Any())
                         {
-                            <a href="@project.ProjectUrl" target="_blank" class="project-link">View Project</a>
-                        }
-                    </div>
-                    <div class="project-user">
-                        @if (project.PortfolioUser != null)
-                        {
-                            <ProfileCard User="@project.PortfolioUser" />
+                            <h4>Your Projects</h4>
+                            @foreach (var project in myProjects)
+                            {
+                                <div class="project-row">
+                                    @if (editingProjectId == project.Id)
+                                    {
+                                        <!-- Edit Project Form -->
+                                        <div class="project-edit-form">
+                                            <EditForm Model="@editingProject" OnValidSubmit="@(() => SaveProject(project.Id))" Context="editProjectFormContext">
+                                                <div class="edit-form">
+                                                    <div class="form-group">
+                                                        <label>Title:</label>
+                                                        <InputText @bind-Value="editingProject.Title" class="form-control" />
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Description:</label>
+                                                        <InputTextArea @bind-Value="editingProject.Description" class="form-control" rows="3" />
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Project URL:</label>
+                                                        <InputText @bind-Value="editingProject.ProjectUrl" class="form-control" />
+                                                    </div>
+                                                    <div class="form-buttons">
+                                                        <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            </EditForm>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="project-details">
+                                            <div class="project-header">
+                                                <h4>@project.Title</h4>
+                                                <div class="project-actions">
+                                                    <button class="btn btn-warning btn-sm" @onclick="(() => StartEditProject(project))">Edit</button>
+                                                    <button class="btn btn-danger btn-sm" @onclick="(() => DeleteProject(project.Id))">Delete</button>
+                                                </div>
+                                            </div>
+                                            <p>@project.Description</p>
+                                            @if (!string.IsNullOrEmpty(project.ProjectUrl))
+                                            {
+                                                <a href="@project.ProjectUrl" target="_blank" class="project-link">View Project</a>
+                                            }
+                                        </div>
+                                        <div class="project-user">
+                                            <ProfileCard User="@myPortfolioUser" />
+                                        </div>
+                                    }
+                                </div>
+                            }
                         }
                         else
                         {
-                            <p><em>Loading user...</em></p>
+                            <p><em>No projects yet. Add your first project above!</em></p>
                         }
                     </div>
                 }
-            </div>
+            }
         }
-    </div>
-}
+        else
+        {
+            <!-- Manager/Admin Role: See all projects -->
+            <!-- Add New Project Form -->
+            <div class="add-project-form">
+                <h4>Add New Project</h4>
+                <EditForm Model="@newProject" OnValidSubmit="@AddProject" Context="addAllProjectFormContext">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Title:</label>
+                            <InputText @bind-Value="newProject.Title" class="form-control" placeholder="Project title" />
+                        </div>
+                        <div class="form-group">
+                            <label>Description:</label>
+                            <InputTextArea @bind-Value="newProject.Description" class="form-control" rows="2" placeholder="Project description" />
+                        </div>
+                        <div class="form-group">
+                            <label>Project URL:</label>
+                            <InputText @bind-Value="newProject.ProjectUrl" class="form-control" placeholder="https://github.com/user/project" />
+                        </div>
+                        <div class="form-group">
+                            <label>Portfolio User:</label>
+                            <InputSelect @bind-Value="newProject.PortfolioUserId" class="form-control">
+                                <option value="0">Select a user...</option>
+                                @if (portfolioUsers != null)
+                                {
+                                    @foreach (var user in portfolioUsers)
+                                    {
+                                        <option value="@user.Id">@user.Name</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" disabled="@(newProject.PortfolioUserId == 0)">Add Project</button>
+                        </div>
+                    </div>
+                </EditForm>
+            </div>
+
+            @if (projects == null)
+            {
+                <p><em>Loading...</em></p>
+            }
+            else
+            {
+                <div class="projects-container">
+                    @foreach (var project in projects)
+                    {
+                        <div class="project-row">
+                            @if (editingProjectId == project.Id)
+                            {
+                                <!-- Edit Project Form -->
+                                <div class="project-edit-form">
+                                    <EditForm Model="@editingProject" OnValidSubmit="@(() => SaveProject(project.Id))" Context="editAllProjectFormContext">
+                                        <div class="edit-form">
+                                            <div class="form-group">
+                                                <label>Title:</label>
+                                                <InputText @bind-Value="editingProject.Title" class="form-control" />
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Description:</label>
+                                                <InputTextArea @bind-Value="editingProject.Description" class="form-control" rows="3" />
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Project URL:</label>
+                                                <InputText @bind-Value="editingProject.ProjectUrl" class="form-control" />
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Portfolio User:</label>
+                                                <InputSelect @bind-Value="editingProject.PortfolioUserId" class="form-control">
+                                                    @if (portfolioUsers != null)
+                                                    {
+                                                        @foreach (var user in portfolioUsers)
+                                                        {
+                                                            <option value="@user.Id">@user.Name</option>
+                                                        }
+                                                    }
+                                                </InputSelect>
+                                            </div>
+                                            <div class="form-buttons">
+                                                <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                                            </div>
+                                        </div>
+                                    </EditForm>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="project-details">
+                                    <div class="project-header">
+                                        <h4>@project.Title</h4>
+                                        <div class="project-actions">
+                                            <button class="btn btn-warning btn-sm" @onclick="(() => StartEditProject(project))">Edit</button>
+                                            <AuthorizeView Roles="Admin,Manager" Context="deleteContext">
+                                                <button class="btn btn-danger btn-sm" @onclick="(() => DeleteProject(project.Id))">Delete</button>
+                                            </AuthorizeView>
+                                        </div>
+                                    </div>
+                                    <p>@project.Description</p>
+                                    @if (!string.IsNullOrEmpty(project.ProjectUrl))
+                                    {
+                                        <a href="@project.ProjectUrl" target="_blank" class="project-link">View Project</a>
+                                    }
+                                </div>
+                                <div class="project-user">
+                                    @if (project.PortfolioUser != null)
+                                    {
+                                        <ProfileCard User="@project.PortfolioUser" />
+                                    }
+                                    else
+                                    {
+                                        <p><em>Loading user...</em></p>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p>Please log in to manage projects.</p>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
     private List<Project>? projects;
+    private List<Project>? myProjects;
     private List<PortfolioUser>? portfolioUsers;
+    private PortfolioUser? myPortfolioUser;
     private Project newProject = new();
     
     // Edit state
     private int? editingProjectId = null;
     private Project editingProject = new();
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadData();
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                if (authState.User.IsInRole("User"))
+                {
+                    await LoadMyPortfolioAndProjects();
+                }
+                else
+                {
+                    await LoadAllData();
+                }
+            }
+        }
     }
 
-    private async Task LoadData()
+    private async Task LoadAllData()
     {
         projects = await ProjectService.GetAllProjectsAsync();
         portfolioUsers = await PortfolioUserService.GetAllPortfolioUsersAsync();
+    }
+
+    private async Task LoadMyPortfolioAndProjects()
+    {
+        myPortfolioUser = await PortfolioUserService.GetMyPortfolioUserAsync();
+        // If no portfolio user found, create an empty one for display
+        if (myPortfolioUser == null)
+        {
+            myPortfolioUser = new PortfolioUser { Id = 0, Name = "", Bio = "", ProfileImageUrl = "" };
+            myProjects = new List<Project>();
+        }
+        else
+        {
+            myProjects = await ProjectService.GetMyProjectsAsync();
+        }
     }
 
     private async Task AddProject()
@@ -150,7 +308,31 @@ else
         {
             await ProjectService.CreateProjectAsync(newProject);
             newProject = new();
-            await LoadData();
+            await LoadAllData();
+        }
+    }
+
+    private async Task AddProject(int portfolioUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(newProject.Title))
+        {
+            newProject.PortfolioUserId = portfolioUserId;
+            await ProjectService.CreateProjectAsync(newProject);
+            newProject = new();
+            
+            // Refresh the appropriate data based on user role
+            if (AuthenticationStateTask != null)
+            {
+                var authState = await AuthenticationStateTask;
+                if (authState.User.IsInRole("User"))
+                {
+                    await LoadMyPortfolioAndProjects();
+                }
+                else
+                {
+                    await LoadAllData();
+                }
+            }
         }
     }
 
@@ -172,7 +354,20 @@ else
         await ProjectService.UpdateProjectAsync(projectId, editingProject);
         editingProjectId = null;
         editingProject = new();
-        await LoadData();
+        
+        // Refresh the appropriate data based on user role
+        if (AuthenticationStateTask != null)
+        {
+            var authState = await AuthenticationStateTask;
+            if (authState.User.IsInRole("User"))
+            {
+                await LoadMyPortfolioAndProjects();
+            }
+            else
+            {
+                await LoadAllData();
+            }
+        }
     }
 
     private void CancelEdit()
@@ -185,7 +380,19 @@ else
     {
         if (await ProjectService.DeleteProjectAsync(projectId))
         {
-            await LoadData();
+            // Refresh the appropriate data based on user role
+            if (AuthenticationStateTask != null)
+            {
+                var authState = await AuthenticationStateTask;
+                if (authState.User.IsInRole("User"))
+                {
+                    await LoadMyPortfolioAndProjects();
+                }
+                else
+                {
+                    await LoadAllData();
+                }
+            }
         }
     }
 }
