@@ -63,6 +63,18 @@ builder.Services.AddAuthentication(options =>
 // Register JWT service
 builder.Services.AddScoped<IJwtService, JwtService>();
 
+// Configure Memory Cache with optimization settings
+builder.Services.AddMemoryCache(options =>
+{
+    // Set memory limits to prevent excessive memory usage
+    options.SizeLimit = 1024; // Max 1024 cache entries
+    options.CompactionPercentage = 0.20; // Remove 20% of entries when limit is reached
+    options.ExpirationScanFrequency = TimeSpan.FromMinutes(5); // Check for expired entries every 5 minutes
+});
+
+// Register Cache Service
+builder.Services.AddScoped<ICacheService, CacheService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorApp",

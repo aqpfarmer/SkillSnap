@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillSnap.Backend.Data;
+using SkillSnap.Backend.Services;
 using SkillSnap.Shared.Models;
 
 namespace SkillSnap.Backend.Controllers
@@ -12,24 +13,36 @@ namespace SkillSnap.Backend.Controllers
     public class ProjectsController : ControllerBase
     {
         private readonly SkillSnapContext _context;
+        private readonly ICacheService _cacheService;
 
-        public ProjectsController(SkillSnapContext context)
+        public ProjectsController(SkillSnapContext context, ICacheService cacheService)
         {
             _context = context;
+            _cacheService = cacheService;
         }
 
         // GET: api/Projects
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Project>>> GetProjects()
         {
-            return await _context.Projects.Include(p => p.PortfolioUser).ToListAsync();
+            return await _cacheService.GetOrSetAsync(
+                CacheKeys.ALL_PROJECTS,
+                async () => await _context.Projects.Include(p => p.PortfolioUser).ToListAsync(),
+                TimeSpan.FromMinutes(15)
+            );
         }
 
         // GET: api/Projects/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Project>> GetProject(int id)
         {
-            var project = await _context.Projects.FindAsync(id);
+            var cacheKey = string.Format(CacheKeys.PROJECT_BY_ID, id);
+            
+            var project = await _cacheService.GetOrSetAsync(
+                cacheKey,
+                async () => await _context.Projects.Include(p => p.PortfolioUser).FirstOrDefaultAsync(p => p.Id == id),
+                TimeSpan.FromMinutes(15)
+            );
 
             if (project == null)
             {
@@ -49,10 +62,16 @@ namespace SkillSnap.Backend.Controllers
                 return Unauthorized();
             }
 
-            var projects = await _context.Projects
-                .Include(p => p.PortfolioUser)
-                .Where(p => p.PortfolioUser != null && p.PortfolioUser.ApplicationUserId == userId)
-                .ToListAsync();
+            var cacheKey = string.Format(CacheKeys.PROJECTS_BY_USER_ID, userId);
+            
+            var projects = await _cacheService.GetOrSetAsync(
+                cacheKey,
+                async () => await _context.Projects
+                    .Include(p => p.PortfolioUser)
+                    .Where(p => p.PortfolioUser != null && p.PortfolioUser.ApplicationUserId == userId)
+                    .ToListAsync(),
+                TimeSpan.FromMinutes(10) // Slightly shorter cache for user-specific data
+            );
 
             return Ok(projects);
         }
@@ -87,6 +106,20 @@ namespace SkillSnap.Backend.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+                
+                // Invalidate related cache entries after successful update
+                _cacheService.Remove(CacheKeys.ALL_PROJECTS);
+                _cacheService.Remove(string.Format(CacheKeys.PROJECT_BY_ID, id));
+                
+                // Invalidate user-specific caches
+                var updatedProject = await _context.Projects
+                    .Include(p => p.PortfolioUser)
+                    .FirstOrDefaultAsync(p => p.Id == id);
+                    
+                if (updatedProject?.PortfolioUser?.ApplicationUserId != null)
+                {
+                    _cacheService.Remove(string.Format(CacheKeys.PROJECTS_BY_USER_ID, updatedProject.PortfolioUser.ApplicationUserId));
+                }
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -123,6 +156,19 @@ namespace SkillSnap.Backend.Controllers
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
+            // Invalidate related cache entries after successful creation
+            _cacheService.Remove(CacheKeys.ALL_PROJECTS);
+            
+            // Invalidate user-specific cache if we know the portfolio user
+            var createdProject = await _context.Projects
+                .Include(p => p.PortfolioUser)
+                .FirstOrDefaultAsync(p => p.Id == project.Id);
+                
+            if (createdProject?.PortfolioUser?.ApplicationUserId != null)
+            {
+                _cacheService.Remove(string.Format(CacheKeys.PROJECTS_BY_USER_ID, createdProject.PortfolioUser.ApplicationUserId));
+            }
+
             return CreatedAtAction("GetProject", new { id = project.Id }, project);
         }
 
@@ -150,6 +196,16 @@ namespace SkillSnap.Backend.Controllers
 
             _context.Projects.Remove(project);
             await _context.SaveChangesAsync();
+
+            // Invalidate related cache entries after successful deletion
+            _cacheService.Remove(CacheKeys.ALL_PROJECTS);
+            _cacheService.Remove(string.Format(CacheKeys.PROJECT_BY_ID, id));
+            
+            // Invalidate user-specific cache
+            if (project.PortfolioUser?.ApplicationUserId != null)
+            {
+                _cacheService.Remove(string.Format(CacheKeys.PROJECTS_BY_USER_ID, project.PortfolioUser.ApplicationUserId));
+            }
 
             return NoContent();
         }

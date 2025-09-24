@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillSnap.Backend.Data;
+using SkillSnap.Backend.Services;
 using SkillSnap.Shared.Models;
 
 namespace SkillSnap.Backend.Controllers
@@ -14,25 +15,37 @@ namespace SkillSnap.Backend.Controllers
     {
         private readonly SkillSnapContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly ICacheService _cacheService;
 
-        public PortfolioUsersController(SkillSnapContext context, UserManager<ApplicationUser> userManager)
+        public PortfolioUsersController(SkillSnapContext context, UserManager<ApplicationUser> userManager, ICacheService cacheService)
         {
             _context = context;
             _userManager = userManager;
+            _cacheService = cacheService;
         }
 
         // GET: api/PortfolioUsers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PortfolioUser>>> GetPortfolioUsers()
         {
-            return await _context.PortfolioUsers.Include(p => p.Projects).Include(p => p.Skills).ToListAsync();
+            return await _cacheService.GetOrSetAsync(
+                CacheKeys.ALL_PORTFOLIO_USERS,
+                async () => await _context.PortfolioUsers.Include(p => p.Projects).Include(p => p.Skills).ToListAsync(),
+                TimeSpan.FromMinutes(15)
+            );
         }
 
         // GET: api/PortfolioUsers/5
         [HttpGet("{id}")]
         public async Task<ActionResult<PortfolioUser>> GetPortfolioUser(int id)
         {
-            var portfolioUser = await _context.PortfolioUsers.Include(p => p.Projects).Include(p => p.Skills).FirstOrDefaultAsync(p => p.Id == id);
+            var cacheKey = string.Format(CacheKeys.PORTFOLIO_USER_BY_ID, id);
+            
+            var portfolioUser = await _cacheService.GetOrSetAsync(
+                cacheKey,
+                async () => await _context.PortfolioUsers.Include(p => p.Projects).Include(p => p.Skills).FirstOrDefaultAsync(p => p.Id == id),
+                TimeSpan.FromMinutes(15)
+            );
 
             if (portfolioUser == null)
             {
@@ -130,6 +143,14 @@ namespace SkillSnap.Backend.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+                
+                // Invalidate related cache entries after successful update
+                _cacheService.Remove(CacheKeys.ALL_PORTFOLIO_USERS);
+                _cacheService.Remove(string.Format(CacheKeys.PORTFOLIO_USER_BY_ID, id));
+                if (existingEntity.ApplicationUserId != null)
+                {
+                    _cacheService.Remove(string.Format(CacheKeys.PORTFOLIO_USER_BY_APP_USER_ID, existingEntity.ApplicationUserId));
+                }
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -154,6 +175,9 @@ namespace SkillSnap.Backend.Controllers
             _context.PortfolioUsers.Add(portfolioUser);
             await _context.SaveChangesAsync();
 
+            // Invalidate cache after creating new user
+            _cacheService.Remove(CacheKeys.ALL_PORTFOLIO_USERS);
+
             return CreatedAtAction("GetPortfolioUser", new { id = portfolioUser.Id }, portfolioUser);
         }
 
@@ -170,6 +194,14 @@ namespace SkillSnap.Backend.Controllers
 
             _context.PortfolioUsers.Remove(portfolioUser);
             await _context.SaveChangesAsync();
+
+            // Invalidate related cache entries after successful deletion
+            _cacheService.Remove(CacheKeys.ALL_PORTFOLIO_USERS);
+            _cacheService.Remove(string.Format(CacheKeys.PORTFOLIO_USER_BY_ID, id));
+            if (portfolioUser.ApplicationUserId != null)
+            {
+                _cacheService.Remove(string.Format(CacheKeys.PORTFOLIO_USER_BY_APP_USER_ID, portfolioUser.ApplicationUserId));
+            }
 
             return NoContent();
         }

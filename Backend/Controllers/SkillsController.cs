@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillSnap.Backend.Data;
+using SkillSnap.Backend.Services;
 using SkillSnap.Shared.Models;
 
 namespace SkillSnap.Backend.Controllers
@@ -12,17 +13,23 @@ namespace SkillSnap.Backend.Controllers
     public class SkillsController : ControllerBase
     {
         private readonly SkillSnapContext _context;
+        private readonly ICacheService _cacheService;
 
-        public SkillsController(SkillSnapContext context)
+        public SkillsController(SkillSnapContext context, ICacheService cacheService)
         {
             _context = context;
+            _cacheService = cacheService;
         }
 
         // GET: api/Skills
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Skill>>> GetSkills()
         {
-            return await _context.Skills.Include(s => s.PortfolioUser).ToListAsync();
+            return await _cacheService.GetOrSetAsync(
+                CacheKeys.ALL_SKILLS,
+                async () => await _context.Skills.Include(s => s.PortfolioUser).ToListAsync(),
+                TimeSpan.FromMinutes(15)
+            );
         }
 
         // GET: api/Skills/5
@@ -109,6 +116,17 @@ namespace SkillSnap.Backend.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+                
+                // Invalidate related cache entries after successful update
+                _cacheService.Remove(CacheKeys.ALL_SKILLS);
+                _cacheService.Remove(string.Format(CacheKeys.SKILL_BY_ID, id));
+                _cacheService.Remove("skills:distinct_names"); // Invalidate distinct names cache
+                
+                // Invalidate user-specific skills cache
+                if (skill.PortfolioUserId > 0)
+                {
+                    _cacheService.Remove(string.Format(CacheKeys.SKILLS_BY_USER_ID, skill.PortfolioUserId));
+                }
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -175,6 +193,16 @@ namespace SkillSnap.Backend.Controllers
             _context.Skills.Add(skill);
             await _context.SaveChangesAsync();
 
+            // Invalidate related cache entries after successful creation
+            _cacheService.Remove(CacheKeys.ALL_SKILLS);
+            _cacheService.Remove("skills:distinct_names"); // Invalidate distinct names cache
+            
+            // Invalidate user-specific skills cache
+            if (skill.PortfolioUserId > 0)
+            {
+                _cacheService.Remove(string.Format(CacheKeys.SKILLS_BY_USER_ID, skill.PortfolioUserId));
+            }
+
             return CreatedAtAction("GetSkill", new { id = skill.Id }, skill);
         }
 
@@ -234,6 +262,17 @@ namespace SkillSnap.Backend.Controllers
             _context.Skills.Remove(skill);
             await _context.SaveChangesAsync();
 
+            // Invalidate related cache entries after successful deletion
+            _cacheService.Remove(CacheKeys.ALL_SKILLS);
+            _cacheService.Remove(string.Format(CacheKeys.SKILL_BY_ID, id));
+            _cacheService.Remove("skills:distinct_names"); // Invalidate distinct names cache
+            
+            // Invalidate user-specific skills cache
+            if (skill.PortfolioUserId > 0)
+            {
+                _cacheService.Remove(string.Format(CacheKeys.SKILLS_BY_USER_ID, skill.PortfolioUserId));
+            }
+
             return NoContent();
         }
 
@@ -241,14 +280,16 @@ namespace SkillSnap.Backend.Controllers
         [HttpGet("names/distinct")]
         public async Task<ActionResult<IEnumerable<string>>> GetDistinctSkillNames()
         {
-            var distinctNames = await _context.Skills
-                .Where(s => !string.IsNullOrEmpty(s.Name))
-                .Select(s => s.Name)
-                .Distinct()
-                .OrderBy(name => name)
-                .ToListAsync();
-
-            return Ok(distinctNames);
+            return await _cacheService.GetOrSetAsync(
+                "skills:distinct_names",
+                async () => await _context.Skills
+                    .Where(s => !string.IsNullOrEmpty(s.Name))
+                    .Select(s => s.Name)
+                    .Distinct()
+                    .OrderBy(name => name)
+                    .ToListAsync(),
+                TimeSpan.FromMinutes(30) // Longer cache since skill names don't change often
+            );
         }
 
         private bool SkillExists(int id)
