@@ -1,57 +1,239 @@
 @page "/skills"
 @using Frontend.Shared
 @using SkillSnap.Shared.Models
-@inject HttpClient Http
+@using Frontend.Services
+@inject PortfolioUserService PortfolioUserService
+@inject SkillService SkillService
 
+<h3>Manage Portfolio Users & Skills</h3>
 
+<!-- Add New User Form -->
+<div class="add-user-form">
+    <h4>Add New Portfolio User</h4>
+    <EditForm Model="@newUser" OnValidSubmit="@AddUser">
+        <div class="form-row">
+            <div class="form-group">
+                <label>Name:</label>
+                <InputText @bind-Value="newUser.Name" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label>Bio:</label>
+                <InputTextArea @bind-Value="newUser.Bio" class="form-control" rows="2" />
+            </div>
+            <div class="form-group">
+                <label>Profile Image URL:</label>
+                <InputText @bind-Value="newUser.ProfileImageUrl" class="form-control" />
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">Add User</button>
+            </div>
+        </div>
+    </EditForm>
+</div>
 
-
-<h3>Skills</h3>
-
-@if (skills == null)
+@if (portfolioUsers == null)
 {
     <p><em>Loading...</em></p>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Name</th>
-                <th>Level</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var skill in skills)
-            {
-                <tr>
-                    <td>@skill.Id</td>
-                    <td>@skill.Name</td>
-                    <td>@skill.Level</td>
-                    <td>
-                        @if (user == null)
-                        {
-                            <p><em>Loading...</em></p>
-                        }
-                        else
-                        {
-                            <ProfileCard User="user" />
-                        }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="users-container">
+        @foreach (var user in portfolioUsers)
+        {
+            <div class="user-skills-row">
+                <div class="user-profile">
+                    @if (editingUserId == user.Id)
+                    {
+                        <!-- Edit User Form -->
+                        <EditForm Model="@editingUser" OnValidSubmit="@(() => SaveUser(user.Id))">
+                            <div class="edit-form">
+                                <div class="form-group">
+                                    <label>Name:</label>
+                                    <InputText @bind-Value="editingUser.Name" class="form-control" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Bio:</label>
+                                    <InputTextArea @bind-Value="editingUser.Bio" class="form-control" rows="2" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Profile Image URL:</label>
+                                    <InputText @bind-Value="editingUser.ProfileImageUrl" class="form-control" />
+                                </div>
+                                <div class="form-buttons">
+                                    <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <ProfileCard User="@user" />
+                        <div class="user-actions">
+                            <button class="btn btn-warning btn-sm" @onclick="(() => StartEditUser(user))">Edit</button>
+                            <button class="btn btn-danger btn-sm" @onclick="(() => DeleteUser(user.Id))">Delete</button>
+                        </div>
+                    }
+                </div>
+                
+                <div class="user-skills">
+                    <!-- Add New Skill Form -->
+                    <div class="add-skill-form">
+                        <h5>Add New Skill</h5>
+                        <EditForm Model="@newSkill" OnValidSubmit="@(() => AddSkill(user.Id))">
+                            <div class="skill-form-row">
+                                <InputText @bind-Value="newSkill.Name" placeholder="Skill name" class="form-control" />
+                                <InputText @bind-Value="newSkill.Level" placeholder="Level" class="form-control" />
+                                <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                            </div>
+                        </EditForm>
+                    </div>
+
+                    <!-- Display Skills -->
+                    @if (user.Skills != null && user.Skills.Any())
+                    {
+                        <h4>Skills</h4>
+                        <div class="skills-list">
+                            @foreach (var skill in user.Skills)
+                            {
+                                @if (editingSkillId == skill.Id)
+                                {
+                                    <!-- Edit Skill Form -->
+                                    <EditForm Model="@editingSkill" OnValidSubmit="@(() => SaveSkill(skill.Id))">
+                                        <div class="edit-skill-form">
+                                            <InputText @bind-Value="editingSkill.Name" class="form-control" />
+                                            <InputText @bind-Value="editingSkill.Level" class="form-control" />
+                                            <button type="submit" class="btn btn-success btn-sm">Save</button>
+                                            <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelSkillEdit">Cancel</button>
+                                        </div>
+                                    </EditForm>
+                                }
+                                else
+                                {
+                                    <div class="skill-item">
+                                        <span class="skill-tag-editable">@skill.Name - @skill.Level</span>
+                                        <div class="skill-actions">
+                                            <button class="btn btn-warning btn-xs" @onclick="(() => StartEditSkill(skill))">Edit</button>
+                                            <button class="btn btn-danger btn-xs" @onclick="(() => DeleteSkill(skill.Id))">Delete</button>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p><em>No skills listed.</em></p>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 }
 
 @code {
-    private Skill[]? skills;
-    private PortfolioUser? user;
+    private List<PortfolioUser>? portfolioUsers;
+    private PortfolioUser newUser = new();
+    private Skill newSkill = new();
+    
+    // Edit state
+    private int? editingUserId = null;
+    private PortfolioUser editingUser = new();
+    private int? editingSkillId = null;
+    private Skill editingSkill = new();
 
     protected override async Task OnInitializedAsync()
     {
-        skills = await Http.GetFromJsonAsync<Skill[]>("api/skills");
-        user = await Http.GetFromJsonAsync<PortfolioUser>("api/portfoliousers/1");
+        await LoadPortfolioUsers();
+    }
+
+    private async Task LoadPortfolioUsers()
+    {
+        portfolioUsers = await PortfolioUserService.GetAllPortfolioUsersAsync();
+    }
+
+    private async Task AddUser()
+    {
+        if (!string.IsNullOrWhiteSpace(newUser.Name))
+        {
+            await PortfolioUserService.CreatePortfolioUserAsync(newUser);
+            newUser = new();
+            await LoadPortfolioUsers();
+        }
+    }
+
+    private void StartEditUser(PortfolioUser user)
+    {
+        editingUserId = user.Id;
+        editingUser = new PortfolioUser
+        {
+            Id = user.Id,
+            Name = user.Name,
+            Bio = user.Bio,
+            ProfileImageUrl = user.ProfileImageUrl
+        };
+    }
+
+    private async Task SaveUser(int userId)
+    {
+        await PortfolioUserService.UpdatePortfolioUserAsync(userId, editingUser);
+        editingUserId = null;
+        editingUser = new();
+        await LoadPortfolioUsers();
+    }
+
+    private void CancelEdit()
+    {
+        editingUserId = null;
+        editingUser = new();
+    }
+
+    private async Task DeleteUser(int userId)
+    {
+        await PortfolioUserService.DeletePortfolioUserAsync(userId);
+        await LoadPortfolioUsers();
+    }
+
+    private async Task AddSkill(int userId)
+    {
+        if (!string.IsNullOrWhiteSpace(newSkill.Name))
+        {
+            newSkill.PortfolioUserId = userId;
+            await SkillService.CreateSkillAsync(newSkill);
+            newSkill = new();
+            await LoadPortfolioUsers();
+        }
+    }
+
+    private void StartEditSkill(Skill skill)
+    {
+        editingSkillId = skill.Id;
+        editingSkill = new Skill
+        {
+            Id = skill.Id,
+            Name = skill.Name,
+            Level = skill.Level,
+            PortfolioUserId = skill.PortfolioUserId
+        };
+    }
+
+    private async Task SaveSkill(int skillId)
+    {
+        await SkillService.UpdateSkillAsync(skillId, editingSkill);
+        editingSkillId = null;
+        editingSkill = new();
+        await LoadPortfolioUsers();
+    }
+
+    private void CancelSkillEdit()
+    {
+        editingSkillId = null;
+        editingSkill = new();
+    }
+
+    private async Task DeleteSkill(int skillId)
+    {
+        await SkillService.DeleteSkillAsync(skillId);
+        await LoadPortfolioUsers();
     }
 }

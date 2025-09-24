@@ -7,6 +7,12 @@
         <div class="profile-info">
             <h3>@User.Name</h3>
             <p>@User.Bio</p>
+            @if (User.Skills != null && User.Skills.Any())
+            {
+                <div class="profile-skills">
+                    <SkillTags Skills="User.Skills.ToList()" />
+                </div>
+            }
         </div>
     }
     else

@@ -1,7 +1,151 @@
 ﻿@page "/"
+@using SkillSnap.Shared.Models
+@using Frontend.Services
+@inject PortfolioUserService PortfolioUserService
 
-<PageTitle>Home</PageTitle>
+<PageTitle>SkillSnap - Developer Portfolio Platform</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="hero-section">
+    <div class="hero-content">
+        <h1>Welcome to SkillSnap</h1>
+        <h2>Your Complete Developer Portfolio Platform</h2>
+        <p class="lead">
+            Showcase your skills, highlight your projects, and manage your professional profile 
+            with SkillSnap - the modern solution for developer portfolios.
+        </p>
+    </div>
+</div>
 
-Welcome to your new app.
+<div class="features-section">
+    <div class="container">
+        <h3>What is SkillSnap?</h3>
+        <p>
+            SkillSnap is a full-stack web application designed to help developers create and manage 
+            their professional portfolios. Built with modern technologies, it demonstrates 
+            comprehensive understanding of backend development, frontend frameworks, database management, 
+            and security principles.
+        </p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">👤</div>
+                <h4>Portfolio Management</h4>
+                <p>Create and manage detailed developer profiles with personal information, bio, and professional image.</p>
+                <a href="/skills" class="feature-link">Manage Users →</a>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🛠️</div>
+                <h4>Skills Tracking</h4>
+                <p>Add, edit, and organize technical skills with proficiency levels. Display them as beautiful skill tags.</p>
+                <a href="/skills" class="feature-link">View Skills →</a>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">💼</div>
+                <h4>Project Showcase</h4>
+                <p>Display your projects with descriptions, links, and associate them with the developers who built them.</p>
+                <a href="/projects" class="feature-link">Browse Projects →</a>
+            </div>
+        </div>
+
+        <div class="tech-stack-section">
+            <h3>Built With Modern Technology</h3>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <h5>Backend</h5>
+                    <ul>
+                        <li>ASP.NET Core Web API</li>
+                        <li>Entity Framework Core</li>
+                        <li>SQLite Database</li>
+                        <li>RESTful API Design</li>
+                    </ul>
+                </div>
+                <div class="tech-item">
+                    <h5>Frontend</h5>
+                    <ul>
+                        <li>Blazor WebAssembly</li>
+                        <li>Component-Based Architecture</li>
+                        <li>Responsive CSS Design</li>
+                        <li>Modern UI/UX</li>
+                    </ul>
+                </div>
+                <div class="tech-item">
+                    <h5>Features</h5>
+                    <ul>
+                        <li>Full CRUD Operations</li>
+                        <li>Real-time Data Updates</li>
+                        <li>Cross-Origin Resource Sharing</li>
+                        <li>Secure HTTPS Communication</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        @if (totalStats != null)
+        {
+            <div class="stats-section">
+                <h3>Platform Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">@totalStats.Users</div>
+                        <div class="stat-label">Portfolio Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">@totalStats.Skills</div>
+                        <div class="stat-label">Skills Tracked</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">@totalStats.Projects</div>
+                        <div class="stat-label">Projects Showcased</div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="cta-section">
+            <h3>Get Started</h3>
+            <p>Explore the platform and see how SkillSnap can help showcase developer portfolios effectively.</p>
+            <div class="cta-buttons">
+                <a href="/skills" class="btn btn-primary">Manage Skills</a>
+                <a href="/projects" class="btn btn-outline">View Projects</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public class PlatformStats
+    {
+        public int Users { get; set; }
+        public int Skills { get; set; }
+        public int Projects { get; set; }
+    }
+
+    private PlatformStats? totalStats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStats();
+    }
+
+    private async Task LoadStats()
+    {
+        try
+        {
+            var users = await PortfolioUserService.GetAllPortfolioUsersAsync();
+            
+            totalStats = new PlatformStats
+            {
+                Users = users.Count,
+                Skills = users.SelectMany(u => u.Skills ?? new List<Skill>()).Count(),
+                Projects = users.SelectMany(u => u.Projects ?? new List<Project>()).Count()
+            };
+        }
+        catch
+        {
+            // Handle error gracefully
+            totalStats = new PlatformStats { Users = 0, Skills = 0, Projects = 0 };
+        }
+    }
+}

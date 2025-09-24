@@ -20,7 +20,7 @@ namespace SkillSnap.Backend.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Project>>> GetProjects()
         {
-            return await _context.Projects.ToListAsync();
+            return await _context.Projects.Include(p => p.PortfolioUser).ToListAsync();
         }
 
         // GET: api/Projects/5
