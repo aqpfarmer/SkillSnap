@@ -1,0 +1,57 @@
+@page "/skills"
+@using Frontend.Shared
+@using SkillSnap.Shared.Models
+@inject HttpClient Http
+
+
+
+
+<h3>Skills</h3>
+
+@if (skills == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Name</th>
+                <th>Level</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var skill in skills)
+            {
+                <tr>
+                    <td>@skill.Id</td>
+                    <td>@skill.Name</td>
+                    <td>@skill.Level</td>
+                    <td>
+                        @if (user == null)
+                        {
+                            <p><em>Loading...</em></p>
+                        }
+                        else
+                        {
+                            <ProfileCard User="user" />
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Skill[]? skills;
+    private PortfolioUser? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        skills = await Http.GetFromJsonAsync<Skill[]>("api/skills");
+        user = await Http.GetFromJsonAsync<PortfolioUser>("api/portfoliousers/1");
+    }
+}

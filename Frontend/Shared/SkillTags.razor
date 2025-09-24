@@ -1,0 +1,16 @@
+@using SkillSnap.Shared.Models
+
+@if (Skills != null)
+{
+    <div class="skill-tags">
+        @foreach (var skill in Skills)
+        {
+            <span class="skill-tag">@skill.Name</span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<Skill>? Skills { get; set; }
+}

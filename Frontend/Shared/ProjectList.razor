@@ -1,0 +1,29 @@
+@using SkillSnap.Shared.Models
+
+<h3>Projects</h3>
+
+@if (Projects != null)
+{
+    <div class="project-list">
+        @foreach (var project in Projects)
+        {
+            <div class="project-item">
+                <h4>@project.Title</h4>
+                <p>@project.Description</p>
+                @if (!string.IsNullOrEmpty(project.ProjectUrl))
+                {
+                    <a href="@project.ProjectUrl" target="_blank">View Project</a>
+                }
+            </div>
+        }
+    </div>
+}
+else
+{
+    <p><em>No projects to display.</em></p>
+}
+
+@code {
+    [Parameter]
+    public List<Project>? Projects { get; set; }
+}

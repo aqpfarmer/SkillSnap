@@ -1,0 +1,21 @@
+@using SkillSnap.Shared.Models
+
+<div class="profile-card">
+    @if (User != null)
+    {
+        <img src="@User.ProfileImageUrl" alt="Profile Picture" class="profile-picture" />
+        <div class="profile-info">
+            <h3>@User.Name</h3>
+            <p>@User.Bio</p>
+        </div>
+    }
+    else
+    {
+        <p><em>Loading profile...</em></p>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public PortfolioUser? User { get; set; }
+}
