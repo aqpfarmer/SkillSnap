@@ -1,38 +1,44 @@
 using System.ComponentModel.DataAnnotations;
+using SkillSnap.Shared.Attributes;
 
 namespace SkillSnap.Shared.Models
 {
     public class LoginDto
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "Email is required")]
+        [SecureEmail]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
-        [MinLength(6)]
+        [Required(ErrorMessage = "Password is required")]
+        [StringLength(100, MinimumLength = 6, ErrorMessage = "Password must be between 6 and 100 characters")]
+        [NoXss]
+        [NoSqlInjection]
         public string Password { get; set; } = string.Empty;
     }
 
     public class RegisterDto
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "Email is required")]
+        [SecureEmail]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
-        [MinLength(6)]
+        [Required(ErrorMessage = "Password is required")]
+        [StrongPassword]
         public string Password { get; set; } = string.Empty;
 
-        [Required]
-        [Compare("Password")]
+        [Required(ErrorMessage = "Password confirmation is required")]
+        [Compare("Password", ErrorMessage = "Passwords do not match")]
         public string ConfirmPassword { get; set; } = string.Empty;
 
-        [Required]
+        [Required(ErrorMessage = "First name is required")]
+        [SafeText(MaxLength = 50)]
         public string FirstName { get; set; } = string.Empty;
 
-        [Required]
+        [Required(ErrorMessage = "Last name is required")]
+        [SafeText(MaxLength = 50)]
         public string LastName { get; set; } = string.Empty;
 
+        [SafeText(MaxLength = 20)]
         public string? Role { get; set; } = "User"; // Default to User role
     }
 

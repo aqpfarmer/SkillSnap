@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SkillSnap.Backend.Data;
 using SkillSnap.Backend.Services;
+using SkillSnap.Backend.Middleware;
 using SkillSnap.Shared.Models;
 using System.Text;
 
@@ -13,28 +14,34 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<SkillSnapContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Configure Identity
+// Configure Identity with enhanced security settings
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    // Password settings
+    // Enhanced password settings following Azure security best practices
     options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 6;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireLowercase = false;
+    options.Password.RequiredLength = 8;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequiredUniqueChars = 4;
     
-    // Lockout settings
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(30);
+    // Enhanced lockout settings
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
     
-    // User settings
+    // Enhanced user settings
     options.User.RequireUniqueEmail = true;
+    options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+    
+    // Sign-in settings for enhanced security
+    options.SignIn.RequireConfirmedEmail = false; // Set to true in production
+    options.SignIn.RequireConfirmedPhoneNumber = false;
 })
 .AddEntityFrameworkStores<SkillSnapContext>()
 .AddDefaultTokenProviders();
 
-// Configure JWT Authentication
+// Configure JWT Authentication with enhanced security
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 var key = Encoding.UTF8.GetBytes(jwtKey);
 
@@ -45,8 +52,8 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // Set to true in production
-    options.SaveToken = true;
+    options.RequireHttpsMetadata = true; // Enhanced security - require HTTPS in production
+    options.SaveToken = false; // Don't save tokens for better security
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
@@ -56,12 +63,34 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidAudience = builder.Configuration["Jwt:Audience"],
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
+        ClockSkew = TimeSpan.FromMinutes(1), // Reduced clock skew for better security
+        RequireExpirationTime = true,
+        RequireSignedTokens = true
+    };
+    
+    // Enhanced event handling for security monitoring
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("JWT authentication failed: {Error}", context.Exception.Message);
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogDebug("JWT token validated for user: {User}", context.Principal?.Identity?.Name);
+            return Task.CompletedTask;
+        }
     };
 });
 
 // Register JWT service
 builder.Services.AddScoped<IJwtService, JwtService>();
+
+// Register Security Service for XSS and SQL injection protection
+builder.Services.AddScoped<ISecurityService, SecurityService>();
 
 // Register Metrics Service (as Singleton to persist metrics across requests)
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
@@ -78,14 +107,17 @@ builder.Services.AddMemoryCache(options =>
 // Register Cache Service
 builder.Services.AddScoped<ICacheService, CacheService>();
 
+// Enhanced CORS configuration with security considerations
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorApp",
         builder =>
         {
-            builder.WithOrigins("http://localhost:5008") // Adjust the port if your Blazor app runs on a different one
+            builder.WithOrigins("http://localhost:5008", "https://localhost:5009") // Support both HTTP and HTTPS
                    .AllowAnyHeader()
-                   .AllowAnyMethod();
+                   .AllowAnyMethod()
+                   .AllowCredentials() // Allow credentials for authentication
+                   .SetPreflightMaxAge(TimeSpan.FromMinutes(10)); // Cache preflight requests
         });
 });
 
@@ -117,15 +149,17 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Configure the HTTP request pipeline.
+// Configure the HTTP request pipeline with enhanced security
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+// Security middleware pipeline - order is critical for security
 app.UseHttpsRedirection();
 
+// CORS must be before authentication
 app.UseCors("AllowBlazorApp");
 
 // Authentication & Authorization middleware

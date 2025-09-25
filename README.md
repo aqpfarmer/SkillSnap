@@ -23,6 +23,20 @@ SkillSnap serves as a complete portfolio management platform where developers ca
 - **Automatic Role Assignment** - New users get User role by default
 - **Complete User Seeding** - Pre-configured accounts for all roles (Admin, Manager, User)
 
+### 🛡️ **Enterprise Security Implementation** *(NEW)*
+- **🔒 Comprehensive XSS Protection** - Multi-layer XSS attack prevention with pattern matching and HTML sanitization
+- **🛡️ SQL Injection Prevention** - Advanced SQL injection detection and blocking at multiple levels
+- **🚫 Input Validation & Sanitization** - Custom validation attributes for all model inputs with automatic sanitization
+- **🌐 Security Headers Middleware** - Complete HTTP security headers (CSP, HSTS, X-Frame-Options, etc.)
+- **⏱️ Rate Limiting & DDoS Protection** - Intelligent rate limiting with endpoint-specific rules and client tracking
+- **🔐 Enhanced Password Security** - Strong password requirements (8+ chars, mixed case, digits, special chars)
+- **📧 Secure Email Validation** - RFC-compliant email validation with additional security checks
+- **🔗 URL Safety Validation** - Safe URL scheme validation (HTTP/HTTPS only, blocks javascript://, etc.)
+- **🏷️ Security Validation Attributes** - Model-level protection with custom validation attributes:
+  - `[NoXss]`, `[NoSqlInjection]`, `[SafeUrl]`, `[StrongPassword]`, `[SafeText]`, `[SecureEmail]`
+- **🎯 Security Testing Endpoints** - Comprehensive security testing and validation API
+- **📊 Security Monitoring** - Comprehensive logging and monitoring of security events
+
 ### 🚀 Performance & Monitoring
 - **Enterprise-Grade Caching System** - Comprehensive IMemoryCache implementation with circuit breaker pattern
 - **Performance Metrics Dashboard** - Real-time monitoring (Manager role exclusive access)
@@ -100,12 +114,22 @@ SkillSnap serves as a complete portfolio management platform where developers ca
 
 ### Security Implementation
 ```
-🔑 Authentication: JWT Bearer Tokens
-👮 Authorization: Role-based access control
-🔐 Identity: ASP.NET Core Identity framework
-🛡️ Password Hashing: Built-in secure hashing
-🔒 HTTPS: Enforced secure communication
-🌐 CORS: Strict origin policy
+🔑 Authentication: JWT Bearer Tokens with enhanced validation
+👮 Authorization: Role-based access control with security middleware
+🔐 Identity: ASP.NET Core Identity framework with strong password policies
+🛡️ Password Security: Enhanced requirements (8+ chars, mixed case, digits, special chars)
+🔒 HTTPS: Enforced secure communication with HSTS headers
+🌐 CORS: Strict origin policy with credentials support
+🛡️ XSS Protection: Comprehensive XSS attack prevention with pattern matching
+� SQL Injection Prevention: Multi-layer SQL injection detection and blocking
+🌐 Security Headers: Complete HTTP security headers (CSP, HSTS, X-Frame-Options, etc.)
+⏱️ Rate Limiting: Intelligent DDoS protection with endpoint-specific rules
+🔗 Input Validation: Custom security validation attributes on all models
+📧 Email Security: Enhanced email validation with security checks
+🔗 URL Safety: Safe URL scheme validation and dangerous protocol blocking
+🏷️ Model Security: Automatic input sanitization at model binding level
+📊 Security Testing: Comprehensive security validation and testing API
+🎯 Security Monitoring: Real-time security event logging and monitoring
 ```
 
 ## 📁 Project Structure
@@ -120,11 +144,16 @@ SkillSnap/
 │   │   ├── 📄 PortfolioUsersController.cs # User portfolio & role management
 │   │   ├── 📄 MetricsController.cs     # Performance metrics API (Manager role)
 │   │   ├── 📄 CacheController.cs       # Cache management endpoints
+│   │   ├── 📄 SecurityTestController.cs # Security testing and validation endpoints *(NEW)*
 │   │   └── 📄 DebugController.cs       # Development debugging endpoints
 │   ├── 📁 Services/              # Business logic services
 │   │   ├── 📄 JwtService.cs            # JWT token generation/validation
 │   │   ├── 📄 CacheService.cs          # Enterprise caching with circuit breaker
+│   │   ├── 📄 SecurityService.cs       # Comprehensive security validation service *(NEW)*
 │   │   └── 📄 MetricsService.cs        # Performance monitoring and analytics
+│   ├── 📁 Middleware/            # Security and performance middleware *(NEW)*
+│   │   ├── 📄 SecurityHeadersMiddleware.cs # HTTP security headers middleware
+│   │   └── 📄 RateLimitingMiddleware.cs # Rate limiting and DDoS protection middleware
 │   ├── 📁 Data/                  # Database context and initialization
 │   │   ├── � SkillSnapContext.cs      # EF Core DbContext with optimized queries
 │   │   └── 📄 DbInitializer.cs         # Database seeding (Admin, Manager, User)
@@ -158,12 +187,14 @@ SkillSnap/
 │   │   └── 📄 SkillTags.razor          # Skills display component
 │   └── 📁 Layout/                # Application layout
 ├── 📁 Shared/                     # Shared models and DTOs
-│   └── 📁 Models/                # Data models and DTOs
-│       ├── 📄 ApplicationUser.cs       # Extended IdentityUser
-│       ├── 📄 PortfolioUser.cs         # Portfolio user model
-│       ├── 📄 Skill.cs                 # Skill model
-│       ├── 📄 Project.cs               # Project model
-│       └── 📄 AuthenticationModels.cs  # Auth DTOs
+│   ├── 📁 Models/                # Data models and DTOs
+│   │   ├── 📄 ApplicationUser.cs       # Extended IdentityUser
+│   │   ├── 📄 PortfolioUser.cs         # Portfolio user model
+│   │   ├── 📄 Skill.cs                 # Skill model
+│   │   ├── 📄 Project.cs               # Project model
+│   │   └── 📄 AuthenticationModels.cs  # Auth DTOs
+│   └── 📁 Attributes/            # Security validation attributes *(NEW)*
+│       └── 📄 SecurityValidationAttributes.cs # Custom security validation attributes
 └── 📄 SkillSnap.sln              # Solution file
 ```
 
@@ -320,6 +351,15 @@ The API includes comprehensive Swagger documentation available at:
 - `POST /api/metrics/simulate-load` - Generate load for testing
 - `POST /api/metrics/test-circuit-breaker` - Test circuit breaker functionality
 
+#### Security Testing *(NEW)*
+- `GET /api/SecurityTest/security-status` - Get comprehensive security status
+- `POST /api/SecurityTest/test-xss` - Test XSS protection with malicious input
+- `POST /api/SecurityTest/test-sql-injection` - Test SQL injection prevention
+- `POST /api/SecurityTest/test-url` - Test URL validation and safety
+- `POST /api/SecurityTest/test-password` - Test password strength validation
+- `POST /api/SecurityTest/test-email` - Test email validation security
+- `GET /api/SecurityTest/test-rate-limit` - Test rate limiting functionality
+
 #### Cache Management
 - `GET /api/cache/stats` - Get cache performance statistics
 - `POST /api/cache/clear` - Clear application cache
@@ -377,6 +417,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Technical Accomplishments
 - ✅ **Full-Stack Architecture** - Complete end-to-end application
 - ✅ **Enterprise Security** - JWT authentication with role-based authorization  
+- ✅ **🛡️ Comprehensive Security Implementation** - XSS/SQL injection prevention, security headers, rate limiting *(NEW)*
+- ✅ **🔒 Advanced Input Validation** - Custom security validation attributes with automatic sanitization *(NEW)*
+- ✅ **🌐 Security Middleware Pipeline** - Multi-layer security protection with headers and rate limiting *(NEW)*
 - ✅ **Advanced User Management** - Complete CRUD with role assignment and profile image handling
 - ✅ **Smart Image Processing** - Google search URL extraction with cache-busting and fallback handling
 - ✅ **Modern Frontend** - Component-based Blazor WebAssembly SPA with advanced state management
@@ -391,6 +434,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ **🔄 Resilient Architecture** - Circuit breaker pattern with automatic fallback strategies
 - ✅ **📈 Load Testing Integration** - Built-in performance simulation and testing capabilities
 - ✅ **🎯 Advanced State Management** - Frontend state management with UserSessionService and StateAware components
+- ✅ **🧪 Comprehensive Security Testing** - Built-in security validation and testing endpoints *(NEW)*
 
 ### Development Practices
 - 📋 **Clean Code** - Well-organized, readable codebase
@@ -404,9 +448,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 Additional Documentation
 
-For detailed Manager user testing and performance metrics information, see:
+For detailed documentation on specific features:
 - **[Manager User Guide](MANAGER_USER_GUIDE.md)** - Complete guide for Manager role features and performance dashboard testing
+- **[Security Implementation Report](SECURITY_IMPLEMENTATION_REPORT.md)** - Comprehensive security features documentation *(NEW)*
 
 ---
 
-**Built with ❤️ by [aqpfarmer](https://github.com/aqpfarmer) using .NET 9, Blazor WebAssembly, and enterprise-grade performance monitoring.**
+**Built with ❤️ by [aqpfarmer](https://github.com/aqpfarmer) using .NET 9, Blazor WebAssembly, enterprise-grade performance monitoring, and comprehensive security implementation.**

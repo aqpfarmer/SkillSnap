@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SkillSnap.Shared.Attributes;
 
 namespace SkillSnap.Shared.Models
 {
@@ -7,8 +8,15 @@ namespace SkillSnap.Shared.Models
     {
         [Key]
         public int Id { get; set; }
+
+        [Required(ErrorMessage = "Name is required")]
+        [SafeText(MaxLength = 100)]
         public string? Name { get; set; }
+
+        [SafeText(MaxLength = 1000)]
         public String? Bio { get; set; }
+
+        [SafeUrl]
         public string? ProfileImageUrl { get; set; }
         
         // Navigation properties
