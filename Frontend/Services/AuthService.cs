@@ -37,12 +37,25 @@ namespace Frontend.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
+            return await ExecuteAuthRequestAsync(loginDto, "api/auth/login", "Login failed");
+        }
+
+        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
+        {
+            return await ExecuteAuthRequestAsync(registerDto, "api/auth/register", "Registration failed");
+        }
+
+        /// <summary>
+        /// Common method for executing authentication requests to reduce code duplication
+        /// </summary>
+        private async Task<AuthResponseDto> ExecuteAuthRequestAsync<T>(T requestDto, string endpoint, string defaultErrorMessage)
+        {
             try
             {
-                var json = JsonSerializer.Serialize(loginDto, _jsonOptions);
+                var json = JsonSerializer.Serialize(requestDto, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.PostAsync("api/auth/login", content);
+                var response = await _httpClient.PostAsync(endpoint, content);
                 var responseContent = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode)
@@ -51,14 +64,14 @@ namespace Frontend.Services
                     if (authResponse != null && authResponse.IsSuccess && !string.IsNullOrEmpty(authResponse.Token))
                     {
                         await SetTokenAsync(authResponse.Token);
-                        ((CustomAuthenticationStateProvider)_authenticationStateProvider).NotifyAuthenticationStateChanged();
+                        NotifyAuthenticationStateChanged();
                     }
                     return authResponse ?? new AuthResponseDto { IsSuccess = false, Message = "Invalid response" };
                 }
                 else
                 {
                     var errorResponse = JsonSerializer.Deserialize<AuthResponseDto>(responseContent, _jsonOptions);
-                    return errorResponse ?? new AuthResponseDto { IsSuccess = false, Message = "Login failed" };
+                    return errorResponse ?? new AuthResponseDto { IsSuccess = false, Message = defaultErrorMessage };
                 }
             }
             catch (Exception ex)
@@ -67,35 +80,14 @@ namespace Frontend.Services
             }
         }
 
-        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
+        /// <summary>
+        /// Notifies authentication state change
+        /// </summary>
+        private void NotifyAuthenticationStateChanged()
         {
-            try
+            if (_authenticationStateProvider is CustomAuthenticationStateProvider customProvider)
             {
-                var json = JsonSerializer.Serialize(registerDto, _jsonOptions);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync("api/auth/register", content);
-                var responseContent = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var authResponse = JsonSerializer.Deserialize<AuthResponseDto>(responseContent, _jsonOptions);
-                    if (authResponse != null && authResponse.IsSuccess && !string.IsNullOrEmpty(authResponse.Token))
-                    {
-                        await SetTokenAsync(authResponse.Token);
-                        ((CustomAuthenticationStateProvider)_authenticationStateProvider).NotifyAuthenticationStateChanged();
-                    }
-                    return authResponse ?? new AuthResponseDto { IsSuccess = false, Message = "Invalid response" };
-                }
-                else
-                {
-                    var errorResponse = JsonSerializer.Deserialize<AuthResponseDto>(responseContent, _jsonOptions);
-                    return errorResponse ?? new AuthResponseDto { IsSuccess = false, Message = "Registration failed" };
-                }
-            }
-            catch (Exception ex)
-            {
-                return new AuthResponseDto { IsSuccess = false, Message = $"An error occurred: {ex.Message}" };
+                customProvider.NotifyAuthenticationStateChanged();
             }
         }
 

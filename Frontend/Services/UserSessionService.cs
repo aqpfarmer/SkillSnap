@@ -387,7 +387,7 @@ namespace Frontend.Services
         /// <summary>
         /// Clear all cached data
         /// </summary>
-        public async Task InvalidateAllCache()
+        public Task InvalidateAllCache()
         {
             _portfolioUsers = null;
             _userProjects = null;
@@ -395,6 +395,7 @@ namespace Frontend.Services
             _currentPortfolioUser = null;
             _cacheTimestamps.Clear();
             NotifyStateChanged();
+            return Task.CompletedTask;
         }
 
         /// <summary>

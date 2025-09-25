@@ -2,9 +2,7 @@
 @using SkillSnap.Shared.Models
 @using Frontend.Services
 @using Frontend.Shared
-@using Frontend.Components
 @using Microsoft.AspNetCore.Components.Authorization
-@inherits StateAwareComponentBase
 @inject IProjectService ProjectService
 @inject IPortfolioUserService PortfolioUserService
 @inject IAuthService AuthService
@@ -16,11 +14,16 @@
         @if (authContext.User.IsInRole("User"))
         {
             <!-- User Role: Only see their own projects -->
-            @if (myPortfolioUser == null)
+            @if (isLoading)
             {
-                <p><em>Loading your portfolio...</em></p>
+                <div class="d-flex justify-content-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span class="ms-2">Loading your portfolio...</span>
+                </div>
             }
-            else if (myPortfolioUser.Id == 0)
+            else if (myPortfolioUser == null || myPortfolioUser.Id == 0)
             {
                 <div class="alert alert-warning">
                     <p>You don't have a portfolio user profile yet. Please contact an administrator to set up your profile.</p>
@@ -28,10 +31,26 @@
             }
             else
             {
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        @successMessage
+                        <button type="button" class="btn-close" @onclick="ClearSuccessMessage"></button>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        @errorMessage
+                        <button type="button" class="btn-close" @onclick="ClearErrorMessage"></button>
+                    </div>
+                }
+                
                 <!-- Add New Project Form for User -->
                 <div class="add-project-form">
                     <h4>Add New Project</h4>
-                    <EditForm Model="@newProject" OnValidSubmit="@(() => AddProject(myPortfolioUser.Id))" Context="addProjectFormContext">
+                    <EditForm Model="@newProject" OnValidSubmit="@AddUserProject" Context="addProjectFormContext">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Title:</label>
@@ -46,7 +65,17 @@
                                 <InputText @bind-Value="newProject.ProjectUrl" class="form-control" placeholder="https://github.com/user/project" />
                             </div>
                             <div class="form-group">
-                                <button type="submit" class="btn btn-primary">Add Project</button>
+                                <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        <span>Adding...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Add Project</span>
+                                    }
+                                </button>
                             </div>
                         </div>
                     </EditForm>
@@ -260,27 +289,69 @@
     // Edit state
     private int? editingProjectId = null;
     private Project editingProject = new();
+    
+    // UI state
+    private bool isLoading = false;
+    private bool isSubmitting = false;
+    private string? successMessage;
+    private string? errorMessage;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        if (AuthenticationStateTask != null)
+        isLoading = true;
+        try
         {
-            var authState = await AuthenticationStateTask;
-            if (authState.User.Identity?.IsAuthenticated == true)
+            if (AuthenticationStateTask != null)
             {
-                if (authState.User.IsInRole("User"))
+                var authState = await AuthenticationStateTask;
+                if (authState.User.Identity?.IsAuthenticated == true)
                 {
-                    await LoadMyPortfolioAndProjects();
-                }
-                else
-                {
-                    await LoadAllData();
+                    if (authState.User.IsInRole("User"))
+                    {
+                        await LoadMyPortfolioAndProjects();
+                    }
+                    else
+                    {
+                        await LoadAllData();
+                    }
                 }
             }
         }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load projects: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ClearSuccessMessage()
+    {
+        successMessage = null;
+    }
+
+    private void ClearErrorMessage()
+    {
+        errorMessage = null;
+    }
+
+    private void ShowSuccess(string message)
+    {
+        successMessage = message;
+        errorMessage = null;
+        StateHasChanged();
+    }
+
+    private void ShowError(string message)
+    {
+        errorMessage = message;
+        successMessage = null;
+        StateHasChanged();
     }
 
     private async Task LoadAllData()
@@ -304,13 +375,49 @@
         }
     }
 
+    private async Task AddUserProject()
+    {
+        if (myPortfolioUser == null || string.IsNullOrWhiteSpace(newProject.Title)) return;
+        
+        isSubmitting = true;
+        try
+        {
+            newProject.PortfolioUserId = myPortfolioUser.Id;
+            await ProjectService.CreateProjectAsync(newProject);
+            newProject = new();
+            await LoadMyPortfolioAndProjects();
+            ShowSuccess("Project added successfully!");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to add project: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
     private async Task AddProject()
     {
         if (!string.IsNullOrWhiteSpace(newProject.Title) && newProject.PortfolioUserId > 0)
         {
-            await ProjectService.CreateProjectAsync(newProject);
-            newProject = new();
-            await LoadAllData();
+            isSubmitting = true;
+            try
+            {
+                await ProjectService.CreateProjectAsync(newProject);
+                newProject = new();
+                await LoadAllData();
+                ShowSuccess("Project added successfully!");
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Failed to add project: {ex.Message}");
+            }
+            finally
+            {
+                isSubmitting = false;
+            }
         }
     }
 
@@ -318,22 +425,35 @@
     {
         if (!string.IsNullOrWhiteSpace(newProject.Title))
         {
-            newProject.PortfolioUserId = portfolioUserId;
-            await ProjectService.CreateProjectAsync(newProject);
-            newProject = new();
-            
-            // Refresh the appropriate data based on user role
-            if (AuthenticationStateTask != null)
+            isSubmitting = true;
+            try
             {
-                var authState = await AuthenticationStateTask;
-                if (authState.User.IsInRole("User"))
+                newProject.PortfolioUserId = portfolioUserId;
+                await ProjectService.CreateProjectAsync(newProject);
+                newProject = new();
+                
+                // Refresh the appropriate data based on user role
+                if (AuthenticationStateTask != null)
                 {
-                    await LoadMyPortfolioAndProjects();
+                    var authState = await AuthenticationStateTask;
+                    if (authState.User.IsInRole("User"))
+                    {
+                        await LoadMyPortfolioAndProjects();
+                    }
+                    else
+                    {
+                        await LoadAllData();
+                    }
                 }
-                else
-                {
-                    await LoadAllData();
-                }
+                ShowSuccess("Project added successfully!");
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Failed to add project: {ex.Message}");
+            }
+            finally
+            {
+                isSubmitting = false;
             }
         }
     }
@@ -353,35 +473,12 @@
 
     private async Task SaveProject(int projectId)
     {
-        await ProjectService.UpdateProjectAsync(projectId, editingProject);
-        editingProjectId = null;
-        editingProject = new();
-        
-        // Refresh the appropriate data based on user role
-        if (AuthenticationStateTask != null)
+        try
         {
-            var authState = await AuthenticationStateTask;
-            if (authState.User.IsInRole("User"))
-            {
-                await LoadMyPortfolioAndProjects();
-            }
-            else
-            {
-                await LoadAllData();
-            }
-        }
-    }
-
-    private void CancelEdit()
-    {
-        editingProjectId = null;
-        editingProject = new();
-    }
-
-    private async Task DeleteProject(int projectId)
-    {
-        if (await ProjectService.DeleteProjectAsync(projectId))
-        {
+            await ProjectService.UpdateProjectAsync(projectId, editingProject);
+            editingProjectId = null;
+            editingProject = new();
+            
             // Refresh the appropriate data based on user role
             if (AuthenticationStateTask != null)
             {
@@ -395,6 +492,45 @@
                     await LoadAllData();
                 }
             }
+            ShowSuccess("Project updated successfully!");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to update project: {ex.Message}");
+        }
+    }
+
+    private void CancelEdit()
+    {
+        editingProjectId = null;
+        editingProject = new();
+    }
+
+    private async Task DeleteProject(int projectId)
+    {
+        try
+        {
+            if (await ProjectService.DeleteProjectAsync(projectId))
+            {
+                // Refresh the appropriate data based on user role
+                if (AuthenticationStateTask != null)
+                {
+                    var authState = await AuthenticationStateTask;
+                    if (authState.User.IsInRole("User"))
+                    {
+                        await LoadMyPortfolioAndProjects();
+                    }
+                    else
+                    {
+                        await LoadAllData();
+                    }
+                }
+                ShowSuccess("Project deleted successfully!");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to delete project: {ex.Message}");
         }
     }
 }

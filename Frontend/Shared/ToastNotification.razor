@@ -1,0 +1,111 @@
+@* Enhanced Toast Notification Component *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;">
+    @foreach (var toast in ToastMessages)
+    {
+        <div class="toast show @GetToastClass(toast.Type)" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <i class="@GetToastIcon(toast.Type) me-2"></i>
+                <strong class="me-auto">@GetToastTitle(toast.Type)</strong>
+                <small class="text-muted">@toast.Timestamp.ToString("HH:mm:ss")</small>
+                <button type="button" class="btn-close" @onclick="() => RemoveToast(toast.Id)" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                @toast.Message
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ToastMessage> ToastMessages = new();
+    
+    public void ShowSuccess(string message, int durationMs = 5000)
+    {
+        ShowToast(message, ToastType.Success, durationMs);
+    }
+    
+    public void ShowError(string message, int durationMs = 8000)
+    {
+        ShowToast(message, ToastType.Error, durationMs);
+    }
+    
+    public void ShowWarning(string message, int durationMs = 6000)
+    {
+        ShowToast(message, ToastType.Warning, durationMs);
+    }
+    
+    public void ShowInfo(string message, int durationMs = 4000)
+    {
+        ShowToast(message, ToastType.Info, durationMs);
+    }
+    
+    private void ShowToast(string message, ToastType type, int durationMs)
+    {
+        var toast = new ToastMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            Message = message,
+            Type = type,
+            Timestamp = DateTime.Now
+        };
+        
+        ToastMessages.Add(toast);
+        StateHasChanged();
+        
+        // Auto-remove after duration
+        _ = Task.Delay(durationMs).ContinueWith(_ => 
+        {
+            RemoveToast(toast.Id);
+            InvokeAsync(StateHasChanged);
+        });
+    }
+    
+    private void RemoveToast(string id)
+    {
+        ToastMessages.RemoveAll(t => t.Id == id);
+        StateHasChanged();
+    }
+    
+    private string GetToastClass(ToastType type) => type switch
+    {
+        ToastType.Success => "toast-success",
+        ToastType.Error => "toast-error",
+        ToastType.Warning => "toast-warning",
+        ToastType.Info => "toast-info",
+        _ => ""
+    };
+    
+    private string GetToastIcon(ToastType type) => type switch
+    {
+        ToastType.Success => "bi bi-check-circle-fill text-success",
+        ToastType.Error => "bi bi-exclamation-circle-fill text-danger",
+        ToastType.Warning => "bi bi-exclamation-triangle-fill text-warning",
+        ToastType.Info => "bi bi-info-circle-fill text-info",
+        _ => ""
+    };
+    
+    private string GetToastTitle(ToastType type) => type switch
+    {
+        ToastType.Success => "Success",
+        ToastType.Error => "Error",
+        ToastType.Warning => "Warning",
+        ToastType.Info => "Information",
+        _ => ""
+    };
+    
+    public class ToastMessage
+    {
+        public string Id { get; set; } = "";
+        public string Message { get; set; } = "";
+        public ToastType Type { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+    
+    public enum ToastType
+    {
+        Success,
+        Error,
+        Warning,
+        Info
+    }
+}

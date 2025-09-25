@@ -1,0 +1,42 @@
+@* Loading Component for consistent loading states *@
+<div class="loading-container @(FullScreen ? "loading-fullscreen" : "")">
+    @if (ShowSpinner)
+    {
+        <div class="loading-spinner">
+            <div class="spinner-border @SpinnerSize" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <div class="loading-message">
+            <p class="text-muted mb-0">@Message</p>
+        </div>
+    }
+    
+    @if (ShowProgress && Progress.HasValue)
+    {
+        <div class="loading-progress">
+            <div class="progress">
+                <div class="progress-bar" role="progressbar" 
+                     style="width: @(Progress.Value)%" 
+                     aria-valuenow="@Progress.Value" 
+                     aria-valuemin="0" 
+                     aria-valuemax="100">
+                    @Progress.Value%
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public bool ShowSpinner { get; set; } = true;
+    [Parameter] public bool FullScreen { get; set; } = false;
+    [Parameter] public bool ShowProgress { get; set; } = false;
+    [Parameter] public string Message { get; set; } = "Loading...";
+    [Parameter] public string SpinnerSize { get; set; } = "text-primary";
+    [Parameter] public int? Progress { get; set; }
+}
